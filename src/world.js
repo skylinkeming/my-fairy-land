@@ -1,0 +1,652 @@
+import * as T from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+export function createWorld(container, onSelect, icon) {
+  const canvas = container.querySelector("canvas"),
+    renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setClearColor(0xf8f8f0, 0);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+  renderer.outputColorSpace = T.SRGBColorSpace;
+  const scene = new T.Scene(),
+    camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 120);
+  camera.position.set(18, 23, 27);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enablePan = false;
+  controls.enableDamping = true;
+  controls.minZoom = 0.68;
+  controls.maxZoom = 1.85;
+  controls.minPolarAngle = 0.4;
+  controls.maxPolarAngle = 1.22;
+  controls.target.set(0, 0.1, 0);
+  controls.rotateSpeed = 0.55;
+  controls.update();
+  controls.saveState();
+  scene.add(new T.AmbientLight(0xfff9e9, 2.3));
+  const sun = new T.DirectionalLight(0xfff4df, 3.2);
+  sun.position.set(-12, 25, 14);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  Object.assign(sun.shadow.camera, {
+    left: -20,
+    right: 20,
+    top: 20,
+    bottom: -20,
+    near: 1,
+    far: 70,
+  });
+  sun.shadow.normalBias = 0.06;
+  sun.shadow.bias = -0.0001;
+  scene.add(sun);
+  const mats = new Map();
+  function mat(c) {
+    if (!mats.has(c))
+      mats.set(c, new T.MeshStandardMaterial({ color: c, roughness: 1 }));
+    return mats.get(c);
+  }
+  function mesh(geo, c, p = scene) {
+    const m = new T.Mesh(geo, mat(c));
+    m.castShadow = m.receiveShadow = true;
+    p.add(m);
+    return m;
+  }
+  function box(w, h, d, c, x = 0, y = 0, z = 0, p = scene) {
+    const m = mesh(new T.BoxGeometry(w, h, d), c, p);
+    m.position.set(x, y, z);
+    return m;
+  }
+  function ball(r, c, x, y, z, p = scene, s = [1, 1, 1]) {
+    const m = mesh(new T.SphereGeometry(r, 12, 9), c, p);
+    m.position.set(x, y, z);
+    m.scale.set(...s);
+    return m;
+  }
+  function cyl(a, b, h, c, x, y, z, p = scene, n = 12) {
+    const m = mesh(new T.CylinderGeometry(a, b, h, n), c, p);
+    m.position.set(x, y, z);
+    return m;
+  }
+  const top = 0.67,
+    defs = [
+      { id: "home", x: 0, z: 0, c: "#afc588" },
+      { id: "todo", x: -5.75, z: 0, c: "#a9c28e" },
+      { id: "note", x: -2.88, z: -5.05, c: "#bdc88f" },
+      { id: "friends", x: 2.88, z: -5.05, c: "#abc597" },
+      { id: "memories", x: 5.75, z: 0, c: "#bac99e" },
+    ],
+    groups = {},
+    selectable = [];
+  defs.forEach((d) => {
+    const g = new T.Group();
+    g.position.set(d.x, 0, d.z);
+    scene.add(g);
+    groups[d.id] = g;
+    for (const [r, b, h, c, y] of [
+      [2.95, 2.65, 1.18, "#c8ae80", -0.12],
+      [3.04, 2.95, 0.23, "#efdeb1", 0.38],
+      [2.93, 3.02, 0.22, d.c, 0.56],
+    ]) {
+      const m = cyl(r, b, h, c, 0, y, 0, g, 6);
+      m.rotation.y = Math.PI / 6;
+      if (y === 0.56) {
+        m.userData.id = d.id;
+        selectable.push(m);
+      }
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      ball(
+        0.17,
+        "#bfa984",
+        Math.cos(a) * 2.65,
+        -0.5,
+        Math.sin(a) * 2.65,
+        g,
+        [1, 0.6, 0.7],
+      );
+    }
+  });
+  for (let i = 3; i >= 0; i--) {
+    const w = new T.Mesh(
+      new T.CircleGeometry(12.3 + i * 0.8, 64),
+      new T.MeshBasicMaterial({
+        color: ["#aecfbe", "#c2d9c5", "#d9e4d0", "#ebeedf"][i],
+        transparent: true,
+        opacity: 0.63,
+      }),
+    );
+    w.rotation.x = -Math.PI / 2;
+    w.position.set(0, -0.83 - i * 0.01, -0.6);
+    scene.add(w);
+  }
+  const shadow = new T.Mesh(
+    new T.PlaneGeometry(60, 60),
+    new T.ShadowMaterial({ opacity: 0.12 }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = -0.88;
+  shadow.receiveShadow = true;
+  scene.add(shadow);
+  function tree(x, z, s, p, type = 0) {
+    const g = new T.Group();
+    g.position.set(x, top, z);
+    g.scale.setScalar(s);
+    p.add(g);
+    cyl(0.12, 0.18, 1.2, "#94775c", 0, 0.6, 0, g, 7);
+    if (type === 1) {
+      for (let i = 0; i < 3; i++)
+        cyl(
+          0,
+          0.85 - i * 0.17,
+          1.25 - i * 0.13,
+          ["#72976b", "#86a778", "#9bb683"][i],
+          0,
+          1.35 + i * 0.53,
+          0,
+          g,
+          7,
+        );
+    } else {
+      ball(0.95, "#86a86e", 0, 1.65, 0, g, [1, 1.12, 1]);
+      ball(0.72, "#a0ba7d", -0.35, 2.05, 0.06, g);
+      ball(0.67, "#93af74", 0.38, 2.05, -0.1, g);
+      if (type === 2)
+        for (let i = 0; i < 5; i++) {
+          let a = i * 2.4;
+          ball(
+            0.14,
+            "#df9b70",
+            Math.sin(a) * 0.78,
+            1.7 + Math.cos(i * 3) * 0.45,
+            Math.cos(a) * 0.65,
+            g,
+          );
+        }
+    }
+  }
+  function flowers(x, z, p, c = "#f6e3ab", n = 9) {
+    for (let j = 0; j < n; j++) {
+      const g = new T.Group();
+      g.position.set(
+        x + Math.sin(j * 3.88) * 0.55,
+        top,
+        z + Math.cos(j * 3.88) * 0.55,
+      );
+      g.rotation.y = j * 2;
+      p.add(g);
+      cyl(0.015, 0.018, 0.27, "#849461", 0, 0.12, 0, g, 5);
+      for (let i = 0; i < 5; i++) {
+        const a = (i * Math.PI * 2) / 5;
+        ball(
+          0.065,
+          c,
+          Math.cos(a) * 0.075,
+          0.3 + Math.sin(a) * 0.075,
+          0,
+          g,
+          [1, 1, 0.55],
+        );
+      }
+      ball(0.04, "#dcba66", 0, 0.3, 0.025, g);
+    }
+  }
+  function fence(x, z, n, p, rot = 0) {
+    const g = new T.Group();
+    g.position.set(x, top, z);
+    g.rotation.y = rot;
+    p.add(g);
+    for (let i = 0; i <= n; i++) {
+      box(0.1, 0.63, 0.1, "#f1e7cc", i * 0.5, 0.31, 0, g);
+      ball(0.07, "#f5ecd7", i * 0.5, 0.65, 0, g);
+    }
+    for (const h of [0.2, 0.43])
+      box(n * 0.5, 0.08, 0.07, "#f1e7cc", n * 0.25, h, 0, g);
+  }
+  function path(x, z, w, d, p) {
+    box(w, 0.035, d, "#e7d6ae", x, top + 0.01, z, p);
+  }
+  function house(
+    p,
+    {
+      x = 0,
+      z = 0,
+      w = 2.2,
+      h = 1.7,
+      d = 1.7,
+      wall = "#f4e5bc",
+      roof = "#b97959",
+      shop = false,
+    } = {},
+  ) {
+    const g = new T.Group();
+    g.position.set(x, top, z);
+    p.add(g);
+    box(w, h, d, wall, 0, h / 2, 0, g);
+    box(w + 0.18, 0.16, d + 0.12, "#e4d2a4", 0, 0.06, 0, g);
+    const sh = new T.Shape();
+    sh.moveTo(-w / 2 - 0.2, 0);
+    sh.lineTo(0, 0.92);
+    sh.lineTo(w / 2 + 0.2, 0);
+    sh.closePath();
+    const r = mesh(
+      new T.ExtrudeGeometry(sh, { depth: d + 0.4, bevelEnabled: false }),
+      roof,
+      g,
+    );
+    r.position.set(0, h, -d / 2 - 0.2);
+    box(0.65, 1.12, 0.08, "#9a7758", 0, 0.56, d / 2 + 0.05, g);
+    box(0.45, 0.77, 0.025, "#adcaac", 0, 0.69, d / 2 + 0.1, g);
+    box(0.55, 0.09, 0.1, "#f2e0b7", 0, 0.7, d / 2 + 0.14, g);
+    ball(0.045, "#d6ae64", 0.19, 0.57, d / 2 + 0.15, g);
+    for (const s of [-1, 1]) {
+      box(0.52, 0.61, 0.1, "#e4cf9b", s * w * 0.33, h * 0.62, d / 2 + 0.06, g);
+      box(0.38, 0.46, 0.12, "#a3c4bb", s * w * 0.33, h * 0.62, d / 2 + 0.07, g);
+      box(
+        0.025,
+        0.46,
+        0.13,
+        "#fff2ce",
+        s * w * 0.33,
+        h * 0.62,
+        d / 2 + 0.08,
+        g,
+      );
+      box(0.4, 0.025, 0.13, "#fff2ce", s * w * 0.33, h * 0.62, d / 2 + 0.08, g);
+      box(0.66, 0.13, 0.22, "#b37f5c", s * w * 0.33, h * 0.4, d / 2 + 0.1, g);
+      for (let f = 0; f < 3; f++) {
+        ball(
+          0.09,
+          "#8da66c",
+          s * w * 0.33 - 0.21 + f * 0.21,
+          h * 0.45,
+          d / 2 + 0.15,
+          g,
+        );
+        ball(
+          0.055,
+          "#e7b2a2",
+          s * w * 0.33 - 0.21 + f * 0.21,
+          h * 0.5,
+          d / 2 + 0.19,
+          g,
+        );
+      }
+    }
+    box(0.34, 0.75, 0.4, "#ead5ad", w * 0.29, h + 0.48, -d * 0.17, g);
+    box(0.44, 0.1, 0.5, roof, w * 0.29, h + 0.86, -d * 0.17, g);
+    box(0.88, 0.11, 0.34, "#e8dac0", 0, 0.05, d / 2 + 0.23, g);
+    if (shop) {
+      const aw = box(
+        w + 0.12,
+        0.12,
+        0.65,
+        "#f0d5a6",
+        0,
+        h * 0.7,
+        d / 2 + 0.3,
+        g,
+      );
+      aw.rotation.x = 0.12;
+      for (let i = 0; i < 6; i++)
+        box(w / 12, 0.13, 0.64, "#b58d72", -w / 2 + (i * w) / 6, 0, 0, aw);
+    }
+  }
+  function bench(x, z, p, rot = 0) {
+    const g = new T.Group();
+    p.add(g);
+    g.position.set(x, top, z);
+    g.rotation.y = rot;
+    for (let i = 0; i < 3; i++)
+      box(1.1, 0.075, 0.11, "#b28d63", 0, 0.4, i * 0.13, g);
+    for (const y of [0.73, 0.9])
+      box(1.1, 0.12, 0.08, "#b28d63", 0, y, -0.05, g);
+    for (const a of [-0.4, 0.4]) {
+      box(0.08, 0.45, 0.08, "#788371", a, 0.2, 0.12, g);
+      box(0.06, 0.8, 0.06, "#788371", a, 0.5, -0.05, g);
+    }
+  }
+  function lamp(x, z, p) {
+    cyl(0.035, 0.06, 1.55, "#7b8370", x, top + 0.77, z, p, 8);
+    box(0.3, 0.34, 0.3, "#fff1c5", x, top + 1.57, z, p);
+    cyl(0, 0.25, 0.22, "#73816b", x, top + 1.85, z, p, 4);
+  }
+  const home = groups.home;
+  path(0, 1.3, 0.75, 2.5, home);
+  path(1.5, 0.85, 2.5, 0.65, home);
+  house(home, { z: -0.6, w: 2.35, h: 1.65, d: 1.9 });
+  tree(-1.9, -1.05, 0.86, home, 2);
+  tree(1.9, -1.4, 0.86, home);
+  flowers(-1.6, 1.55, home);
+  flowers(1.6, 1.5, home, "#e7a49a");
+  fence(-1, -2.25, 4, home);
+  lamp(-0.8, 1.8, home);
+  box(0.34, 0.3, 0.4, "#7e9a87", 0.83, 1.33, 1.8, home);
+  cyl(0.045, 0.045, 0.6, "#b09876", 0.83, 0.94, 1.8, home);
+  const todo = groups.todo;
+  house(todo, { x: -0.4, z: -0.7, w: 1.8, h: 1.3, d: 1.5, roof: "#8b9b75" });
+  path(0.1, 1, 0.65, 2.4, todo);
+  tree(-1.8, 0.35, 0.77, todo, 1);
+  tree(0.9, -1.7, 0.9, todo, 2);
+  bench(1.35, 0.65, todo, -0.3);
+  fence(-1.3, 1.9, 3, todo);
+  flowers(-1.5, 1.2, todo);
+  flowers(1.8, -0.5, todo, "#faf1d3", 7);
+  const note = groups.note;
+  house(note, {
+    z: -0.3,
+    w: 1.9,
+    h: 1.4,
+    d: 1.5,
+    wall: "#f1d5b7",
+    roof: "#c18a75",
+    shop: true,
+  });
+  path(0, 1.2, 0.65, 2.1, note);
+  tree(-1.8, -0.6, 0.92, note);
+  tree(1.8, -1.1, 0.7, note, 1);
+  cyl(0.53, 0.53, 0.1, "#d2af7d", 1.4, 1.13, 1.05, note);
+  cyl(0.09, 0.14, 0.47, "#ae8b63", 1.4, 0.87, 1.05, note);
+  for (const [x, z] of [
+    [0.7, 1.3],
+    [1.9, 1.65],
+  ])
+    cyl(0.25, 0.28, 0.45, "#d7b981", x, 0.85, z, note);
+  box(0.27, 0.04, 0.35, "#f9eed5", 1.4, 1.21, 1.05, note);
+  flowers(-1.65, 1.3, note, "#e2a395");
+  fence(-1.3, -2.15, 5, note);
+  const friends = groups.friends;
+  path(0, 0.5, 0.9, 4.8, friends);
+  tree(-1.65, -1.2, 1.05, friends, 1);
+  tree(1.7, -0.7, 0.88, friends, 2);
+  tree(0.7, -2, 0.75, friends);
+  bench(-1.4, 0.6, friends, 0.7);
+  flowers(1.5, 1.5, friends, "#eed38b", 11);
+  flowers(-1.7, 1.5, friends, "#faf2d5", 10);
+  fence(-0.8, -2.2, 4, friends);
+  const mem = groups.memories;
+  tree(1.5, -1.3, 1.03, mem, 2);
+  tree(-0.8, -1.8, 0.8, mem);
+  box(1.8, 0.035, 1.45, "#edc7b3", -0.15, top + 0.03, 0.25, mem);
+  for (let i = 0; i < 5; i++)
+    box(0.07, 0.015, 1.45, "#fff0d7", -0.9 + i * 0.36, top + 0.055, 0.25, mem);
+  for (let i = 0; i < 4; i++)
+    box(1.8, 0.015, 0.06, "#fff0d7", -0.15, top + 0.06, -0.3 + i * 0.35, mem);
+  box(0.45, 0.32, 0.32, "#c5a174", 0.25, 0.86, 0.25, mem);
+  const handle = mesh(
+    new T.TorusGeometry(0.17, 0.03, 6, 12, Math.PI),
+    "#aa895e",
+    mem,
+  );
+  handle.position.set(0.25, 1.04, 0.25);
+  box(0.3, 0.19, 0.15, "#6d7b70", -0.5, 0.79, 0.48, mem);
+  const lens = cyl(0.07, 0.07, 0.08, "#455950", -0.5, 0.8, 0.59, mem);
+  lens.rotation.x = Math.PI / 2;
+  bench(-1.7, 0.2, mem, 0.9);
+  flowers(1.5, 0.9, mem, "#d5b1bc", 11);
+  flowers(-0.9, 1.8, mem);
+  fence(0.4, 1.9, 3, mem);
+  lamp(-1.3, 1.2, mem);
+  function bridge(a, b) {
+    const dx = b.x - a.x,
+      dz = b.z - a.z,
+      len = Math.max(0.8, Math.hypot(dx, dz) - 4.7),
+      g = new T.Group();
+    g.position.set((a.x + b.x) / 2, top - 0.05, (a.z + b.z) / 2);
+    g.rotation.y = Math.atan2(dx, dz);
+    scene.add(g);
+    for (let i = 0; i < 8; i++)
+      box(
+        0.75,
+        0.1,
+        (len / 8) * 0.88,
+        "#c9a878",
+        0,
+        0,
+        -len / 2 + ((i + 0.5) * len) / 8,
+        g,
+      );
+    for (const s of [-1, 1]) {
+      for (const z of [-len / 2, len / 2])
+        cyl(0.04, 0.05, 0.55, "#b89c73", s * 0.41, 0.23, z, g, 6);
+      box(0.055, 0.055, len, "#d8ba8b", s * 0.41, 0.46, 0, g);
+    }
+  }
+  [
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [0, 4],
+    [2, 3],
+  ].forEach(([a, b]) => bridge(defs[a], defs[b]));
+  const garden = new T.Group();
+  garden.position.set(0.6, -0.22, 5.55);
+  scene.add(garden);
+  cyl(1.35, 1.1, 0.6, "#cfbb91", 0, 0, 0, garden, 6);
+  cyl(1.34, 1.34, 0.12, "#b0c594", 0, 0.35, 0, garden, 6);
+  tree(0, -0.2, 0.58, garden, 1);
+  flowers(0.4, 0.45, garden, "#fff0c5", 5);
+  for (let i = 0; i < 7; i++)
+    box(1.1, 0.12, 0.2, "#c4a579", 6.2, -0.12, 3.1 + i * 0.23);
+  for (const x of [5.75, 6.65])
+    for (const z of [3.1, 4.5]) cyl(0.065, 0.07, 0.65, "#ae906b", x, -0.13, z);
+  const boat = new T.Group();
+  boat.position.set(7.25, -0.46, 4.8);
+  boat.rotation.y = -0.6;
+  scene.add(boat);
+  ball(0.6, "#e9d3a3", 0, 0, 0, boat, [0.55, 0.35, 1.5]);
+  box(0.5, 0.08, 1.2, "#b29368", 0, 0.08, 0, boat);
+  box(0.52, 0.06, 0.17, "#dfc596", 0, 0.19, 0.2, boat);
+  cyl(0.02, 0.025, 1.7, "#b99b71", 0, 0.85, -0.15, boat);
+  const sh = new T.Shape();
+  sh.moveTo(0, 0);
+  sh.lineTo(0, 1.25);
+  sh.lineTo(0.73, 0.1);
+  sh.closePath();
+  const sail = new T.Mesh(
+    new T.ShapeGeometry(sh),
+    new T.MeshStandardMaterial({ color: "#fff2d8", side: T.DoubleSide }),
+  );
+  sail.position.set(0.03, 0.4, -0.15);
+  boat.add(sail);
+  const residents = [];
+  function plush(type, color, shirt, p, x, z, phase) {
+    const g = new T.Group();
+    p.add(g);
+    g.scale.setScalar(0.7);
+    ball(0.32, color, 0, 0.43, 0, g, [1, 1.2, 0.8]);
+    ball(0.41, color, 0, 1.02, 0.025, g, [1, 0.9, 0.9]);
+    for (const s of [-1, 1]) {
+      if (type === "rabbit") {
+        const ear = ball(0.115, color, s * 0.2, 1.5, 0, g, [1, 2.6, 0.8]);
+        ear.rotation.z = s * -0.14;
+        ball(0.065, "#e0b9ab", s * 0.2, 1.54, 0.075, g, [1, 2.7, 0.4]);
+      } else {
+        ball(0.145, color, s * 0.31, 1.28, 0, g);
+        ball(0.08, "#d3b99d", s * 0.31, 1.28, 0.09, g);
+      }
+      ball(0.028, "#514a3c", s * 0.145, 1.06, 0.36, g);
+      ball(0.065, "#d9a398", s * 0.27, 0.96, 0.32, g, [1, 0.5, 0.25]);
+      ball(0.12, color, s * 0.34, 0.52, 0, g, [0.8, 1.5, 0.8]);
+    }
+    ball(0.2, "#f3e6cb", 0, 0.93, 0.3, g, [1, 0.7, 0.35]);
+    ball(0.04, "#67533f", 0, 0.98, 0.38, g, [1, 0.7, 0.7]);
+    ball(0.28, shirt, 0, 0.5, 0.015, g, [1, 1, 0.88]);
+    ball(0.04, "#e8cf85", 0, 0.56, 0.25, g);
+    const feet = [
+      ball(0.135, color, -0.18, 0.1, 0.08, g, [1, 0.7, 1.4]),
+      ball(0.135, color, 0.18, 0.1, 0.08, g, [1, 0.7, 1.4]),
+    ];
+    g.position.set(x, top, z);
+    residents.push({ g, feet, x, z, phase });
+  }
+  plush("bear", "#bb956e", "#90a080", friends, -0.3, 0.4, 0);
+  plush("rabbit", "#f0e0c9", "#d9a28f", friends, 0.8, 0.7, 2.1);
+  plush("bear", "#a9b18a", "#d8bc7c", home, 0.2, 1.65, 4.2);
+  const clouds = [];
+  for (const [x, y, z, s] of [
+    [-9, 5, -7, 1],
+    [7, 6, -6, 0.7],
+    [-7, 4, 6, 0.6],
+  ]) {
+    const g = new T.Group();
+    g.position.set(x, y, z);
+    g.scale.setScalar(s);
+    scene.add(g);
+    for (const [a, b, c, r] of [
+      [0, 0, 0, 0.8],
+      [-0.7, -0.1, 0, 0.55],
+      [0.65, -0.1, 0.1, 0.6],
+      [0.2, 0.3, 0, 0.6],
+    ]) {
+      const m = ball(r, "#fff9e9", a, b, c, g, [1, 0.63, 0.75]);
+      m.castShadow = false;
+    }
+    clouds.push({ g, x });
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = i * 2.4;
+    const r = new T.Mesh(
+      new T.TorusGeometry(0.25 + (i % 3) * 0.08, 0.015, 4, 24, Math.PI * 1.4),
+      new T.MeshBasicMaterial({
+        color: "#eff6e5",
+        transparent: true,
+        opacity: 0.55,
+      }),
+    );
+    r.rotation.x = -Math.PI / 2;
+    r.rotation.z = a;
+    r.position.set(
+      Math.cos(a) * (9 + (i % 3)),
+      -0.78,
+      Math.sin(a) * (7 + (i % 3)) - 0.4,
+    );
+    scene.add(r);
+  }
+  const labelDefs = [
+    ["todo", "待辦事項島", "一步一步，慢慢來", -5.75, 1.9, 1.4],
+    ["note", "記事本島", "留住想說的話", -2.88, 3.9, -5.05],
+    ["friends", "家人朋友島", "今天也一起散步", 2.88, 3.8, -5.05],
+    ["memories", "美好回憶島", "收藏閃閃發光的日子", 5.75, 2.2, 0.4],
+  ];
+  const labels = labelDefs.map(([id, title, sub, x, y, z]) => {
+    const el = document.createElement("button");
+    el.className = "map-label label-" + id;
+    el.innerHTML = `<span class="label-symbol">${icon(id)}</span><span><strong>${title}</strong><small>${sub}</small></span><span class="label-arrow">↗</span>`;
+    el.onclick = () => onSelect(id);
+    container.querySelector("#world-labels").append(el);
+    return { el, point: new T.Vector3(x, y, z) };
+  });
+  const hl = document.createElement("div");
+  hl.className = "home-label";
+  hl.textContent = "♡ 我們的家";
+  container.querySelector("#world-labels").append(hl);
+  let width = 1,
+    height = 1;
+  function resize() {
+    width = container.clientWidth;
+    height = container.clientHeight;
+    if (!width || !height) return;
+    renderer.setSize(width, height, false);
+    const aspect = width / height,
+      v = 10.1;
+    camera.left = -v * aspect;
+    camera.right = v * aspect;
+    camera.top = v;
+    camera.bottom = -v;
+    camera.updateProjectionMatrix();
+  }
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(container);
+  resize();
+  const clock = new T.Clock(),
+    reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let greetUntil = 0,
+    greetIndex = 0;
+  let animationFrame;
+  function animate() {
+    animationFrame = requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+    controls.update();
+    if (!reduced) {
+      residents.forEach((r, i) => {
+        const a = t * 0.24 + r.phase;
+        r.g.position.x = r.x + Math.sin(a) * 0.52;
+        r.g.position.z = r.z + Math.cos(a) * 0.43;
+        r.g.rotation.y = a + Math.PI / 2;
+        r.g.position.y = top + Math.abs(Math.sin(t * 3 + i)) * 0.025;
+        r.feet.forEach(
+          (f, j) =>
+            (f.position.z = 0.08 + Math.sin(t * 3 + j * Math.PI) * 0.065),
+        );
+        if (t < greetUntil && i === greetIndex) {
+          r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.18;
+          r.g.rotation.y = 0.5;
+        }
+      });
+      clouds.forEach(
+        (c, i) => (c.g.position.x = c.x + Math.sin(t * 0.07 + i) * 0.4),
+      );
+      boat.position.y = -0.45 + Math.sin(t * 1.3) * 0.035;
+      boat.rotation.z = Math.sin(t) * 0.025;
+    }
+    for (const l of labels) {
+      const p = l.point.clone().project(camera);
+      l.el.style.transform = `translate(-50%,-100%) translate(${(p.x * 0.5 + 0.5) * width}px,${(-p.y * 0.5 + 0.5) * height}px)`;
+    }
+    const p = new T.Vector3(0, 1.1, 1.25).project(camera);
+    hl.style.transform = `translate(-50%,0) translate(${(p.x * 0.5 + 0.5) * width}px,${(-p.y * 0.5 + 0.5) * height}px)`;
+    renderer.render(scene, camera);
+  }
+  animate();
+  container.querySelector(".world-loading").remove();
+  const ray = new T.Raycaster();
+  let down;
+  canvas.addEventListener(
+    "pointerdown",
+    (e) => (down = { x: e.clientX, y: e.clientY }),
+  );
+  canvas.addEventListener("pointerup", (e) => {
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
+    const r = canvas.getBoundingClientRect();
+    ray.setFromCamera(
+      new T.Vector2(
+        ((e.clientX - r.left) / r.width) * 2 - 1,
+        (-(e.clientY - r.top) / r.height) * 2 + 1,
+      ),
+      camera,
+    );
+    const hit = ray.intersectObjects(selectable)[0];
+    if (hit && hit.object.userData.id !== "home")
+      onSelect(hit.object.userData.id);
+  });
+  return {
+    dispose() {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      controls.dispose();
+      scene.traverse((object) => {
+        object.geometry?.dispose();
+      });
+      for (const material of mats.values()) material.dispose();
+      renderer.dispose();
+    },
+    zoom(f) {
+      camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 1.85);
+      camera.updateProjectionMatrix();
+    },
+    reset() {
+      controls.reset();
+      camera.zoom = 1;
+      camera.updateProjectionMatrix();
+    },
+    focusIsland() {},
+    tour() {
+      camera.zoom = 1.1;
+      camera.updateProjectionMatrix();
+    },
+    greet(i) {
+      greetIndex = i;
+      greetUntil = clock.getElapsedTime() + 3;
+    },
+  };
+}
