@@ -96,8 +96,10 @@ export function createResidentLife({
   links,
   previous,
   random = Math.random,
+  count = 4,
 }) {
-  const order = [0, 1, 2].sort(() => random() - 0.5);
+  const indices = Array.from({ length: count }, (_, i) => i);
+  const order = [...indices].sort(() => random() - 0.5);
   let mode = chooseActivity(previous, random),
     elapsed = 0,
     nextChange = 55 + random() * 15;
@@ -109,7 +111,7 @@ export function createResidentLife({
       Math.floor(random() * available.length) % available.length
     ];
   };
-  const actors = [0, 1, 2].map((i) => ({
+  const actors = indices.map((i) => ({
     id: i,
     slot: order[i],
     phase: random() * Math.PI * 2,
@@ -131,14 +133,17 @@ export function createResidentLife({
       return { node: n.id, point: { x: n.x, z: n.z + 1.6 }, state: "waiting" };
     }
     if (mode === "swing") {
-      const point = actor.slot < 2 ? PARK.seats[actor.slot] : PARK.pusher;
+      const point = actor.slot < 2 ? PARK.seats[actor.slot] : {
+        x: PARK.pusher.x + (actor.slot - 2 - (count - 3) / 2) * 1.5,
+        z: PARK.pusher.z + .3,
+      };
       return {
         node: "park",
         point: { x: park.x + point.x, z: park.z + point.z },
         state: actor.slot < 2 ? "swinging" : "pushing",
       };
     }
-    const a = (actor.slot * Math.PI * 2) / 3;
+    const a = (actor.slot * Math.PI * 2) / count;
     return {
       node: "park",
       point: {
@@ -242,7 +247,7 @@ export function createResidentLife({
         actor.yOffset = Math.max(0, Math.sin(elapsed * 1.7)) * 0.04;
       } else if (actor.state === "playing") {
         actor.playTime += dt;
-        const a = actor.playTime * 0.62 + (actor.slot * Math.PI * 2) / 3;
+        const a = actor.playTime * 0.62 + (actor.slot * Math.PI * 2) / count;
         actor.x = park.x + PARK.play.x + Math.cos(a) * 1.2;
         actor.z = park.z + PARK.play.z + Math.sin(a) * 1.2;
         actor.heading = -a;

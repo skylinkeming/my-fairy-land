@@ -1,4 +1,5 @@
 import * as T from "three";
+import { createFloralBear } from "./floral-bear.js";
 import { createPlushArt } from "./plush-art.js";
 import {
   BOARD_THEMES,
@@ -851,6 +852,9 @@ export function createWorld(
   plush("bear", "#bb956e", "#90a080", scene, 0, 0, 0);
   plush("rabbit", "#f0e0c9", "#d9a28f", scene, 0, 0, 2.1);
   plush("bear", "#a9b18a", "#d8bc7c", scene, 0, 0, 4.2);
+  const floralBear = createFloralBear(plushArt);
+  scene.add(floralBear.g);
+  residents.push(floralBear);
   const clouds = [];
   for (const [x, y, z, s] of [
     [-9, 5, -7, 1],
@@ -1147,6 +1151,7 @@ export function createWorld(
         object.geometry?.dispose();
       });
       for (const material of mats.values()) material.dispose();
+      floralBear.dispose();
       plushArt.dispose();
       renderer.dispose();
     },

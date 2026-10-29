@@ -1,3 +1,4 @@
+import { PHOTO_BEAR } from "./residents.js";
 import "./style.css";
 import { getUpcomingTodos, isInReminderWindow } from "./todo-reminders.js";
 import { showIslandFallback } from "./world-fallback.js";
@@ -103,6 +104,7 @@ const initial = {
       color: "#a1b28a",
       type: "bear",
     },
+    { ...PHOTO_BEAR },
   ],
 };
 let state;
@@ -113,6 +115,11 @@ try {
 } catch {
   state = structuredClone(initial);
 }
+// Add the new resident to existing households without resetting their journals.
+if (!Array.isArray(state.residents) || !state.residents.length)
+  state.residents = structuredClone(initial.residents);
+else if (!state.residents.some((resident) => resident.type === PHOTO_BEAR.type))
+  state.residents.push({ ...PHOTO_BEAR });
 const save = () => {
   try {
     localStorage.setItem("little-island-v1", JSON.stringify(state));
@@ -478,13 +485,14 @@ function renderNotes() {
   );
 }
 function plushSVG(r) {
+  if (r.type === "floral-bear") return `<svg viewBox="0 0 140 160" role="img" aria-label="${esc(r.name)}"><defs><clipPath id="floral-silhouette"><path d="M34 40C18 18 42 11 53 28Q70 24 87 28C100 11 121 24 106 42L113 76Q132 114 118 123L107 117L103 146Q95 157 79 146L70 135L61 147Q43 157 37 144L33 115Q14 131 14 115L26 78Z"/></clipPath></defs><ellipse cx="70" cy="151" rx="38" ry="5" fill="#000" opacity=".06"/><g clip-path="url(#floral-silhouette)"><path d="M0 0h140v160H0Z" fill="#b7b5a9"/><path d="M65 53Q48 107 67 139Q87 109 79 53Z" fill="#d9d4bf" opacity=".6"/><g fill="none" stroke-width="4" stroke-linecap="round"><path d="m79 73 14-12m-7 6-5-9m5 9 11 1M41 99l10-15m-7 10-7-6m7 6 10 1M46 135l12-11m-6 5-8-3m8 3 9 1" stroke="#657e8f"/><path d="m91 42 8 8m-5-6 6-4M29 77l7 12m-3-7-7 1M85 114l11 9m-6-5 8-4M87 143l8 4" stroke="#b97960"/></g></g><g fill="#292b2b"><ellipse cx="52" cy="48" rx="4" ry="3.5"/><ellipse cx="88" cy="48" rx="4" ry="3.5"/><path d="M65 62Q70 60 75 62L70 69Z"/></g><path d="M70 69v12m0 0-8 7m8-7 8 7" fill="none" stroke="#292b2b" stroke-width="2" stroke-linecap="round"/></svg>`;
   const rabbit = r.type === "rabbit";
   return `<svg viewBox="0 0 140 160" role="img" aria-label="${esc(r.name)}"><ellipse cx="70" cy="146" rx="36" ry="7" fill="#000" opacity=".06"/><g fill="${r.color}" stroke="#756951" stroke-width="1.5">${rabbit ? '<ellipse cx="50" cy="33" rx="12" ry="29" transform="rotate(-10 50 33)"/><ellipse cx="90" cy="33" rx="12" ry="29" transform="rotate(10 90 33)"/>' : '<circle cx="38" cy="44" r="16"/><circle cx="102" cy="44" r="16"/>'}<ellipse cx="70" cy="115" rx="33" ry="31"/><ellipse cx="40" cy="110" rx="11" ry="19" transform="rotate(28 40 110)"/><ellipse cx="100" cy="110" rx="11" ry="19" transform="rotate(-28 100 110)"/><ellipse cx="52" cy="139" rx="13" ry="9"/><ellipse cx="88" cy="139" rx="13" ry="9"/><ellipse cx="70" cy="72" rx="43" ry="36"/></g><ellipse cx="70" cy="83" rx="18" ry="13" fill="#fff5e5"/><circle cx="54" cy="69" r="3" fill="#514735"/><circle cx="86" cy="69" r="3" fill="#514735"/><ellipse cx="70" cy="79" rx="4" ry="3" fill="#514735"/><path d="M70 82v5m-5-1q5 6 10 0" fill="none" stroke="#514735" stroke-width="1.5"/><ellipse cx="43" cy="81" rx="7" ry="4" fill="#e3a193" opacity=".7"/><ellipse cx="97" cy="81" rx="7" ry="4" fill="#e3a193" opacity=".7"/><path d="m53 105 17 8 17-8-3 18H56Z" fill="${rabbit ? "#dba89a" : "#7f9b77"}"/><circle cx="70" cy="117" r="3" fill="#f7e8b5"/></svg>`;
 }
 function renderFriends() {
   const activities = world?.getResidentActivities?.() || [];
   document.querySelector("#panel-content").innerHTML =
-    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>三位小夥伴會跨島散步、在公園盪鞦韆或一起玩耍。點選「打個招呼」，聽聽他們想說的話。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card"><div class="resident-art resident-${i}">${plushSVG(r)}</div><span class="resident-status"><i></i> ${esc(activities[i]?.label || "在島上休息")}</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
+    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>${state.residents.length} 位小夥伴會跨島散步、在公園盪鞦韆或一起玩耍。點選「打個招呼」，聽聽他們想說的話。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card"><div class="resident-art resident-${i}">${plushSVG(r)}</div><span class="resident-status"><i></i> ${esc(activities[i]?.label || "在島上休息")}</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
   document.querySelectorAll("[data-greet]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -494,6 +502,7 @@ function renderFriends() {
             "奶茶小熊：今天也辛苦了！要不要一起坐著發呆？ ☕",
             "棉花小兔：剛剛發現了一朵小花，送給你！ ✿",
             "抹茶小熊：散步的時候，記得抬頭看看天空喔 ♡",
+            `${PHOTO_BEAR.name}：帶著身上的小花紋，陪你一起去散步 ♡`,
           ][i],
         );
         world?.greet(i);

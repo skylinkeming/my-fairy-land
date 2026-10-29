@@ -22,7 +22,7 @@ test("3D map, zoom, rotation, and island navigation work", async ({ page }) => {
   await page.getByRole("button", { name: "重設視角" }).click();
   await page.locator(".label-friends").click();
   await expect(page.locator("#panel-title")).toHaveText("家人朋友島");
-  await expect(page.locator(".resident-card")).toHaveCount(3);
+  await expect(page.locator(".resident-card")).toHaveCount(4);
   await page.getByRole("button", { name: "打個招呼" }).first().click();
   await expect(page.locator("#toast")).toContainText("奶茶小熊");
   await page.keyboard.press("Escape");
@@ -377,7 +377,7 @@ test("resident activities differ after refresh and the watch button brings them 
   await expect(page.locator(".map-expanded")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.locator(".label-friends").click();
-  await expect(page.locator(".resident-status")).toHaveCount(3);
+  await expect(page.locator(".resident-status")).toHaveCount(4);
   await expect(page.locator(".resident-status").first()).toContainText(
     /散步|風景|鞦韆|玩球/,
   );
@@ -597,4 +597,40 @@ test("map move mode pans the enlarged view and can return to rotation", async ({
   const controls = await page.locator(".map-controls").boundingBox();
   expect(controls.x).toBeGreaterThanOrEqual(0);
   expect(controls.x + controls.width).toBeLessThanOrEqual(390);
+});
+
+test("photo bear joins an existing household without resetting family data", async ({ page }) => {
+  test.setTimeout(60000);
+  await page.evaluate(() => {
+    localStorage.setItem("little-island-v1", JSON.stringify({
+      residents: [
+        {name:"奶茶小熊",type:"bear",color:"#ba9770",role:"原本的居民"},
+        {name:"棉花小兔",type:"rabbit",color:"#f4e1d1",role:"原本的居民"},
+        {name:"抹茶小熊",type:"bear",color:"#a1b28a",role:"原本的居民"},
+      ],
+      todos:[{id:"keep-todo",text:"保留原有待辦",date:"2026-10-29",created:Date.now(),done:false}],
+      notes:[{id:"keep-note",title:"保留記事",body:"家人的話",author:"家人",created:1,comments:[]}],
+      memories:[{id:"keep-memory",title:"保留回憶",caption:"我們的照片",date:"2026-10-29",image:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",created:1}],
+    }));
+  });
+  await page.reload();
+  await expect(page.locator(".map-label")).toHaveCount(4);
+  await page.locator('.island-card[data-open="friends"]').click();
+  await expect(page.locator(".resident-card")).toHaveCount(4);
+  const bear=page.locator(".resident-card").filter({hasText:"熊熊"});
+  await expect(bear.getByRole("img")).toHaveAttribute("aria-label","熊熊");
+  await bear.getByRole("button",{name:"打個招呼"}).click();
+  await expect(page.locator("#toast")).toContainText("熊熊");
+  await page.keyboard.press("Escape");
+  await page.locator('.island-card[data-open="todo"]').click();
+  await page.locator("#todo-text").fill("和新朋友一起散步");
+  await page.locator("#todo-form").getByRole("button",{name:"新增"}).click();
+  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem("little-island-v1")));
+  expect(stored.residents).toHaveLength(4);
+  expect(stored.todos.some(todo=>todo.id==="keep-todo")).toBe(true);
+  expect(stored.notes[0].id).toBe("keep-note");
+  expect(stored.memories[0].id).toBe("keep-memory");
+  await page.reload();
+  await page.locator('.island-card[data-open="friends"]').click();
+  await expect(page.locator(".resident-card")).toHaveCount(4);
 });
