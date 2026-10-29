@@ -301,3 +301,146 @@ test("expanded landscape fills the viewport and journals still work above it", a
   await expect(page.locator(".map-expanded")).toHaveCount(0);
   await expect(page.locator("#map-expand")).toBeFocused();
 });
+
+test("optional todo times stay blank or persist when chosen, and completed todos can be deleted", async ({
+  page,
+}) => {
+  await page.locator('.island-card[data-open="todo"]').click();
+  await expect(page.locator("#todo-time")).toHaveValue("");
+  await page.locator("#todo-text").fill("不指定時間的小事");
+  await page
+    .locator("#todo-form")
+    .getByRole("button", { name: "新增" })
+    .click();
+  let untimed = page
+    .locator(".todo-row")
+    .filter({ hasText: "不指定時間的小事" });
+  await expect(untimed.locator("time")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("little-island-v1")).todos.find(
+          (t) => t.text === "不指定時間的小事",
+        ).time,
+    ),
+  ).toBe("");
+  await page.locator("#todo-text").fill("下午一起喝茶");
+  await page.locator("#todo-time").fill("13:45");
+  await page
+    .locator("#todo-form")
+    .getByRole("button", { name: "新增" })
+    .click();
+  await expect(
+    page
+      .locator(".todo-row")
+      .filter({ hasText: "下午一起喝茶" })
+      .locator("time"),
+  ).toHaveText("13:45");
+  await expect(page.locator("#todo-time")).toHaveValue("");
+  await page.reload();
+  await page.locator('.island-card[data-open="todo"]').click();
+  const timed = page.locator(".todo-row").filter({ hasText: "下午一起喝茶" });
+  await expect(timed.locator("time")).toHaveText("13:45");
+  await timed.getByRole("checkbox").check();
+  await expect(
+    page.getByRole("button", { name: "刪除 下午一起喝茶", exact: true }),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .getByRole("button", { name: "刪除已完成（1）", exact: true })
+    .click();
+  await expect(
+    page.locator(".todo-row").filter({ hasText: "下午一起喝茶" }),
+  ).toHaveCount(0);
+  untimed = page.locator(".todo-row").filter({ hasText: "不指定時間的小事" });
+  await expect(untimed).toBeVisible();
+  await untimed.getByRole("checkbox").check();
+  await page
+    .getByRole("button", { name: "刪除 不指定時間的小事", exact: true })
+    .click();
+  await expect(
+    page.locator(".todo-row").filter({ hasText: "不指定時間的小事" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "日曆", exact: true }).click();
+  await expect(page.locator(".calendar-delete").first()).toBeVisible();
+});
+
+test("resident activities differ after refresh and the watch button brings them closer", async ({
+  page,
+}) => {
+  const before = await page.locator("#resident-activity").textContent();
+  expect(before).toMatch(/散步|盪鞦韆|玩耍/);
+  await page.reload();
+  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator("#resident-activity")).not.toHaveText(before);
+  await page.getByRole("button", { name: "看看娃娃", exact: true }).click();
+  await expect(page.locator(".map-expanded")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.locator(".label-friends").click();
+  await expect(page.locator(".resident-status")).toHaveCount(3);
+  await expect(page.locator(".resident-status").first()).toContainText(
+    /散步|風景|鞦韆|玩球/,
+  );
+});
+
+test("calendar completed deletion only removes items in the displayed month", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const now = new Date(),
+      previous = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+    const date = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    localStorage.setItem(
+      "little-island-v1",
+      JSON.stringify({
+        todos: [
+          {
+            id: "this",
+            text: "本月已完成",
+            done: true,
+            date: date(now),
+            created: Date.now(),
+          },
+          {
+            id: "previous",
+            text: "上月已完成",
+            done: true,
+            date: date(previous),
+            created: Date.now(),
+          },
+        ],
+        notes: [],
+        memories: [],
+        residents: [],
+      }),
+    );
+  });
+  await page.reload();
+  await page.locator('.island-card[data-open="todo"]').click();
+  await page.getByRole("button", { name: "日曆", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .getByRole("button", { name: "刪除已完成（1）", exact: true })
+    .click();
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("little-island-v1")).todos.map(
+        (t) => t.id,
+      ),
+    ),
+  ).toEqual(["previous"]);
+  await page.getByRole("button", { name: "上一個月" }).click();
+  await expect(page.locator(".calendar-task")).toContainText("上月已完成");
+});
+
+test('residents and scenery remain still when reduced motion is requested',async({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.reload();await expect(page.locator('.map-label')).toHaveCount(4);
+  const first=await page.locator('#world-canvas').screenshot();
+  await page.waitForTimeout(400);
+  const second=await page.locator('#world-canvas').screenshot();
+  expect(first.equals(second)).toBe(true);
+  await page.locator('.label-todo').click();
+  await expect(page.locator('#todo-form')).toBeVisible();
+});

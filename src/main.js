@@ -167,7 +167,7 @@ let active = null,
 document.querySelector("#app").innerHTML = `
 <header class="site-header"><a class="brand" href="#" aria-label="我們的小島首頁"><span class="brand-mark">${icon("home")}<i></i></span><span>我們的小島<small>OUR LITTLE ISLAND</small></span></a><nav aria-label="主要選單"><button class="nav-item selected" data-home>小島首頁</button><button class="nav-item" data-open="todo">日常小事</button><button class="nav-item" data-open="memories">回憶收藏</button></nav><button class="resident-pill" data-open="friends"><span class="avatar">ʕ•ᴥ•ʔ</span><span>小島居民</span><span class="online-dot"></span></button></header>
 <main><section class="hero" aria-labelledby="hero-title"><div class="hero-copy"><div class="eyebrow"><span></span> A LITTLE PLACE, A LOT OF LOVE</div><h1 id="hero-title">把日子過成<br>我們喜歡的<span class="handwritten">模樣<svg viewBox="0 0 160 15"><path d="M2 10Q75-2 155 8M12 14Q80 4 141 11"/></svg></span><span class="title-dot">。</span></h1><p class="hero-description">在這座小小的島上，<br>一起記住日常、分享心事，收藏每一個美好。<br>因為有你，平凡也會閃閃發光。</p><button class="primary-button" id="explore">來小島走走 ${icon("arrow")}</button><div class="island-signoff"><span class="little-flower">✿</span><span>不必趕路，這裡一直為你留著位置。</span></div></div>
-<div class="world-wrap"><div class="weather-pill">${icon("sun")}<span>今日島上，晴時有你</span><span class="weather-separator"></span><span>24°</span></div><div id="world" aria-label="可拖曳旋轉、縮放與點選的 3D 家族小島"><canvas id="world-canvas"></canvas><div id="world-labels"></div><div class="world-loading"><span>✿</span> 正在準備你的小島…</div></div><div class="map-caption"><span class="live-dot"></span> OUR LITTLE WORLD <span class="caption-line"></span> EST. 2026</div><div class="map-controls"><button id="map-expand" class="map-expand-button" aria-pressed="false">展開地圖 ↗</button><span class="control-divider"></span><button id="sound" class="round-button" aria-label="開啟小島環境音" title="環境音">${icon("muted")}</button><span class="control-divider"></span><button id="zoom-out" class="round-button text-icon" aria-label="縮小">−</button><button id="zoom-in" class="round-button text-icon" aria-label="放大">+</button><button id="reset" class="round-button" aria-label="重設視角" title="重設視角">${icon("reset")}</button></div><div class="map-help">${icon("pin")} 點選小島，發現我們的日常 <span>・ 拖曳旋轉 / 右鍵平移 / 滾輪縮放</span></div></div></section>
+<div class="world-wrap"><div id="resident-activity" class="resident-activity" role="status">娃娃們正在準備出門…</div><div class="weather-pill">${icon("sun")}<span>今日島上，晴時有你</span><span class="weather-separator"></span><span>24°</span></div><div id="world" aria-label="可拖曳旋轉、縮放與點選的 3D 家族小島"><canvas id="world-canvas"></canvas><div id="world-labels"></div><div class="world-loading"><span>✿</span> 正在準備你的小島…</div></div><div class="map-caption"><span class="live-dot"></span> OUR LITTLE WORLD <span class="caption-line"></span> EST. 2026</div><div class="map-controls"><button id="map-expand" class="map-expand-button" aria-pressed="false">展開地圖 ↗</button><span class="control-divider"></span><button id="watch-residents" class="map-expand-button" aria-label="看看娃娃">看看娃娃 ♡</button><button id="sound" class="round-button" aria-label="開啟小島環境音" title="環境音">${icon("muted")}</button><span class="control-divider"></span><button id="zoom-out" class="round-button text-icon" aria-label="縮小">−</button><button id="zoom-in" class="round-button text-icon" aria-label="放大">+</button><button id="reset" class="round-button" aria-label="重設視角" title="重設視角">${icon("reset")}</button></div><div class="map-help">${icon("pin")} 點選小島，發現我們的日常 <span>・ 拖曳旋轉 / 右鍵平移 / 滾輪縮放</span></div></div></section>
 <section class="islands-section" aria-labelledby="islands-heading"><div class="section-top"><div><span class="section-kicker">LIFE HAPPENS HERE</span><h2 id="islands-heading">小島上的每一天 <span>Daily life on our island</span></h2></div><span class="section-note">四座小島，裝著我們的大大小小 ${icon("heart")}</span></div><div class="island-grid">${islands.map((i) => `<button class="island-card ${i.color}" data-open="${i.id}"><div class="card-top"><span class="card-icon">${icon(i.id)}</span><span class="card-number">${i.num}</span></div><span class="card-en">${i.en}</span><h3>${i.title}</h3><p>${i.desc}</p><div class="card-bottom"><span id="count-${i.id}"></span><span class="card-arrow">${icon("arrow")}</span></div></button>`).join("")}</div></section>
 <section class="today-strip"><span class="strip-flower">✿</span><div><span class="section-kicker">A NOTE FOR TODAY</span><p>生活不一定每天都很特別，但每天都可以有一點可愛。</p></div><span class="strip-signature">with love, from our island ♡</span></section></main>
 <footer><span>${icon("leaf")} 我們的小島 <span class="footer-dot">·</span> 每一天，都好好在一起。</span><span>A little home for our favorite people. <span class="footer-heart">♡</span></span></footer>
@@ -180,7 +180,7 @@ function counts() {
   document.querySelector("#count-note").textContent =
     `${state.notes.length} 則暖心記事`;
   document.querySelector("#count-friends").textContent =
-    `${state.residents.length} 位可愛居民 ・ 開心散步中`;
+    `${state.residents.length} 位可愛居民 ・ 在小島上生活`;
   document.querySelector("#count-memories").textContent = state.memories.length
     ? `${state.memories.length} 個閃閃發光的片刻`
     : "一起收藏第一個美好";
@@ -238,10 +238,17 @@ function renderTodos() {
   const sorted = state.todos
     .filter((t) => t.created >= since.getTime() && t.created <= now)
     .sort((a, b) => b.created - a.created);
-  const visible = todoView === "list" ? sorted : state.todos;
+  const calendarMonth = dateString(
+    new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1),
+  ).slice(0, 7);
+  const visible =
+    todoView === "list"
+      ? sorted
+      : state.todos.filter((todo) => todo.date.startsWith(calendarMonth));
   const pending = visible.filter((t) => !t.done).length;
+  const completed = visible.filter((t) => t.done);
   document.querySelector("#panel-content").innerHTML =
-    `<div class="panel-toolbar"><span class="small-muted">${pending ? "還有 " + pending + " 件小事，慢慢來就好" : "今天的你，已經做得很好了 ✨"}</span><div class="view-switch"><button data-view="list" class="${todoView === "list" ? "active" : ""}">清單</button><button data-view="calendar" class="${todoView === "calendar" ? "active" : ""}">${icon("calendar")}日曆</button></div></div><form id="todo-form" class="add-todo"><label class="sr-only" for="todo-text">待辦事項</label><input id="todo-text" placeholder="有什麼想一起做的小事？" required maxlength="160"><label class="sr-only" for="todo-date">預定日期</label><input id="todo-date" type="date" value="${today}" required><button class="primary-button" type="submit">${icon("plus")}<span>新增</span></button></form><p class="todo-range small-muted">${todoView === "list" ? "近兩週新增的待辦 · 最新在上" : "依預定日期查看所有待辦"}</p><div id="todo-list">${todoView === "list" ? `<div class="todo-list">${sorted.length ? sorted.map(todoRow).join("") : '<div class="empty-state">✿<h3>近兩週還沒有新增待辦</h3><p>新增想一起做的小事，或切換日曆查看其他日期。</p></div>'}</div>` : calendar()}</div>`;
+    `<div class="panel-toolbar"><span class="small-muted">${pending ? "還有 " + pending + " 件小事，慢慢來就好" : "今天的你，已經做得很好了 ✨"}</span><div class="view-switch"><button data-view="list" class="${todoView === "list" ? "active" : ""}">清單</button><button data-view="calendar" class="${todoView === "calendar" ? "active" : ""}">${icon("calendar")}日曆</button></div></div><form id="todo-form" class="add-todo"><label class="sr-only" for="todo-text">待辦事項</label><input id="todo-text" placeholder="有什麼想一起做的小事？" required maxlength="160"><label class="sr-only" for="todo-date">預定日期</label><input id="todo-date" type="date" value="${today}" required><label class="todo-time-field" for="todo-time"><span>時間（選填）</span><input id="todo-time" type="time" aria-label="待辦時間（選填）"></label><button class="primary-button" type="submit">${icon("plus")}<span>新增</span></button></form><div class="todo-list-tools"><p class="todo-range small-muted">${todoView === "list" ? "近兩週新增的待辦 · 最新在上" : "依預定日期查看所有待辦"}</p><button id="delete-completed" class="delete-completed" ${completed.length ? "" : "disabled"}>${icon("trash")}刪除已完成（${completed.length}）</button></div><div id="todo-list">${todoView === "list" ? `<div class="todo-list">${sorted.length ? sorted.map(todoRow).join("") : '<div class="empty-state">✿<h3>近兩週還沒有新增待辦</h3><p>新增想一起做的小事，或切換日曆查看其他日期。</p></div>'}</div>` : calendar()}</div>`;
   document.querySelector("#todo-form").onsubmit = (e) => {
     e.preventDefault();
     const text = document.querySelector("#todo-text").value.trim();
@@ -250,12 +257,25 @@ function renderTodos() {
       id: crypto.randomUUID(),
       text,
       date: document.querySelector("#todo-date").value,
+      time: document.querySelector("#todo-time").value,
       done: false,
       created: Date.now(),
     });
     save();
     renderPanel();
     toast("又多了一件值得期待的小事 ♡");
+  };
+  document.querySelector("#delete-completed").onclick = () => {
+    if (
+      !completed.length ||
+      !confirm(`要刪除目前檢視中的 ${completed.length} 件已完成待辦嗎？`)
+    )
+      return;
+    const ids = new Set(completed.map((todo) => todo.id));
+    state.todos = state.todos.filter((todo) => !ids.has(todo.id));
+    save();
+    renderPanel();
+    toast(`已刪除 ${ids.size} 件已完成待辦。`);
   };
   document.querySelectorAll("[data-view]").forEach(
     (b) =>
@@ -293,7 +313,7 @@ function renderTodos() {
   );
 }
 function todoRow(t) {
-  return `<div class="todo-row ${t.done ? "done" : ""}"><label class="todo-check"><input type="checkbox" data-todo-check="${t.id}" ${t.done ? "checked" : ""}><span>${icon("check")}</span><span class="todo-text">${esc(t.text)}</span></label><span class="date-tag ${t.date < today && !t.done ? "overdue" : ""}">${t.date === today ? "今天" : prettyDate(t.date)}</span><button class="tiny-button" data-delete-todo="${t.id}" aria-label="刪除 ${esc(t.text)}">${icon("trash")}</button></div>`;
+  return `<div class="todo-row ${t.done ? "done" : ""}"><label class="todo-check"><input type="checkbox" data-todo-check="${t.id}" ${t.done ? "checked" : ""}><span>${icon("check")}</span><span class="todo-text">${esc(t.text)}</span></label><span class="date-tag ${t.date < today && !t.done ? "overdue" : ""}">${t.date === today ? "今天" : prettyDate(t.date)}${t.time ? ` <time>${esc(t.time)}</time>` : ""}</span><button class="todo-delete" data-delete-todo="${t.id}" aria-label="刪除 ${esc(t.text)}">${icon("trash")}<span>刪除</span></button></div>`;
 }
 function calendar() {
   const y = calendarDate.getFullYear(),
@@ -309,7 +329,7 @@ function calendar() {
       .filter((t) => t.date === ds)
       .map(
         (t) =>
-          `<label class="calendar-task ${t.done ? "done" : ""}" title="${esc(t.text)}"><input type="checkbox" data-todo-check="${t.id}" ${t.done ? "checked" : ""}>${esc(t.text)}</label>`,
+          `<div class="calendar-entry"><label class="calendar-task ${t.done ? "done" : ""}" title="${esc(t.text)}"><input type="checkbox" data-todo-check="${t.id}" ${t.done ? "checked" : ""}>${t.time ? `<time>${esc(t.time)}</time> ` : ""}${esc(t.text)}</label><button class="calendar-delete" data-delete-todo="${t.id}" aria-label="刪除 ${esc(t.text)}" title="刪除待辦">×</button></div>`,
       )
       .join("")}</div>`;
   }
@@ -381,8 +401,9 @@ function plushSVG(r) {
   return `<svg viewBox="0 0 140 160" role="img" aria-label="${esc(r.name)}"><ellipse cx="70" cy="146" rx="36" ry="7" fill="#000" opacity=".06"/><g fill="${r.color}" stroke="#756951" stroke-width="1.5">${rabbit ? '<ellipse cx="50" cy="33" rx="12" ry="29" transform="rotate(-10 50 33)"/><ellipse cx="90" cy="33" rx="12" ry="29" transform="rotate(10 90 33)"/>' : '<circle cx="38" cy="44" r="16"/><circle cx="102" cy="44" r="16"/>'}<ellipse cx="70" cy="115" rx="33" ry="31"/><ellipse cx="40" cy="110" rx="11" ry="19" transform="rotate(28 40 110)"/><ellipse cx="100" cy="110" rx="11" ry="19" transform="rotate(-28 100 110)"/><ellipse cx="52" cy="139" rx="13" ry="9"/><ellipse cx="88" cy="139" rx="13" ry="9"/><ellipse cx="70" cy="72" rx="43" ry="36"/></g><ellipse cx="70" cy="83" rx="18" ry="13" fill="#fff5e5"/><circle cx="54" cy="69" r="3" fill="#514735"/><circle cx="86" cy="69" r="3" fill="#514735"/><ellipse cx="70" cy="79" rx="4" ry="3" fill="#514735"/><path d="M70 82v5m-5-1q5 6 10 0" fill="none" stroke="#514735" stroke-width="1.5"/><ellipse cx="43" cy="81" rx="7" ry="4" fill="#e3a193" opacity=".7"/><ellipse cx="97" cy="81" rx="7" ry="4" fill="#e3a193" opacity=".7"/><path d="m53 105 17 8 17-8-3 18H56Z" fill="${rabbit ? "#dba89a" : "#7f9b77"}"/><circle cx="70" cy="117" r="3" fill="#f7e8b5"/></svg>`;
 }
 function renderFriends() {
+  const activities = world?.getResidentActivities?.() || [];
   document.querySelector("#panel-content").innerHTML =
-    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>三位小夥伴正在島上散步。點選「打個招呼」，聽聽他們想說的話。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card"><div class="resident-art resident-${i}">${plushSVG(r)}</div><span class="resident-status"><i></i> 正在島上散步</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
+    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>三位小夥伴會跨島散步、在公園盪鞦韆或一起玩耍。點選「打個招呼」，聽聽他們想說的話。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card"><div class="resident-art resident-${i}">${plushSVG(r)}</div><span class="resident-status"><i></i> ${esc(activities[i]?.label || "在島上休息")}</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
   document.querySelectorAll("[data-greet]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -545,6 +566,10 @@ document.querySelector("#map-expand").onclick = () =>
   setMapExpanded(
     !document.querySelector(".world-wrap").classList.contains("map-expanded"),
   );
+document.querySelector("#watch-residents").onclick = () => {
+  setMapExpanded(true);
+  world?.watchResidents?.();
+};
 document.querySelector("#explore").onclick = () => {
   world?.tour();
   document
@@ -559,7 +584,9 @@ document.documentElement.dataset.appReady = "true";
 function useIllustratedMap() {
   world = undefined;
   showIslandFallback(document.querySelector("#world"), openPanel, icon);
-  for (const id of ["zoom-in", "zoom-out", "reset"]) {
+  document.querySelector("#resident-activity").textContent =
+    "插畫模式 · 娃娃們在島上休息";
+  for (const id of ["zoom-in", "zoom-out", "reset", "watch-residents"]) {
     document.getElementById(id).disabled = true;
   }
   document.querySelector(".map-help").textContent =

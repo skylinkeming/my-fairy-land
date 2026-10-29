@@ -1,4 +1,5 @@
 import * as T from "three";
+import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 export function createWorld(container, onSelect, icon) {
   const canvas = container.querySelector("canvas"),
@@ -675,7 +676,7 @@ export function createWorld(container, onSelect, icon) {
     tree(x, z, 0.85, garden);
   for (const [x, z, r] of [
     [-2, 2.2, 0.1],
-    [2.5, 3.3, -0.3],
+    [2.8, -1.4, -0.3],
     [-4.5, 1.4, 1.1],
   ])
     bench(x, z, garden, r);
@@ -702,13 +703,117 @@ export function createWorld(container, onSelect, icon) {
   cyl(0, 1.25, 0.85, "#ba8c70", -3.8, top + 2.05, 2.7, garden, 6);
   container.dataset.landAreaMultiplier = String(landScale ** 2);
   container.dataset.scenery = "park hills river";
+  // Two real pendulum rigs; seated residents follow the same pivots as the seats.
+  function timberBetween(a, b, r, color, parent) {
+    const start = new T.Vector3(...a),
+      end = new T.Vector3(...b),
+      delta = end.clone().sub(start);
+    const post = cyl(r, r, delta.length(), color, 0, 0, 0, parent, 8);
+    post.position.copy(start.add(end).multiplyScalar(0.5));
+    post.quaternion.setFromUnitVectors(
+      new T.Vector3(0, 1, 0),
+      delta.normalize(),
+    );
+    return post;
+  }
+  const swingFrame = new T.Group();
+  garden.add(swingFrame);
+  swingFrame.name = "park-swings";
+  for (const x of [0.65, 3.75])
+    for (const z of [2.85, 4.75])
+      timberBetween(
+        [x, top, z],
+        [x, top + 2.9, 3.8],
+        0.075,
+        "#b69a70",
+        swingFrame,
+      );
+  timberBetween(
+    [0.4, top + 2.9, 3.8],
+    [4, top + 2.9, 3.8],
+    0.1,
+    "#c3a77d",
+    swingFrame,
+  );
+  const swingPivots = PARK.seats.map((seat) => {
+    const pivot = new T.Group();
+    pivot.position.set(seat.x, top + 2.8, seat.z);
+    swingFrame.add(pivot);
+    for (const x of [-0.29, 0.29])
+      cyl(0.018, 0.018, 1.75, "#8f967d", x, -0.875, 0, pivot, 6);
+    box(0.8, 0.1, 0.48, "#ccac7d", 0, -1.75, 0, pivot);
+    return pivot;
+  });
+  const playBall = ball(
+    0.22,
+    "#e2b187",
+    PARK.play.x,
+    top + 0.23,
+    PARK.play.z,
+    garden,
+  );
+  playBall.name = "residents-play-ball";
+  const ballStripe = mesh(
+    new T.TorusGeometry(0.221, 0.018, 5, 16),
+    "#fff0d1",
+    playBall,
+  );
+  ballStripe.rotation.x = 0.6;
+  let previousActivity;
+  try {
+    previousActivity = sessionStorage.getItem("little-island-last-activity");
+  } catch {}
+  const life = createResidentLife({
+    nodes: [...defs, PARK],
+    links: [
+      ["home", "todo"],
+      ["home", "note"],
+      ["home", "friends"],
+      ["home", "memories"],
+      ["note", "friends"],
+      ["home", "park"],
+    ],
+    previous: previousActivity,
+  });
+  try {
+    sessionStorage.setItem("little-island-last-activity", life.initialMode);
+  } catch {}
+  const activityBadge = document.querySelector("#resident-activity");
+  function updateActivityBadge() {
+    container.dataset.residentActivity = life.mode;
+    if (activityBadge) activityBadge.textContent = ACTIVITY_LABELS[life.mode];
+  }
+  updateActivityBadge();
+  life.update(0);
+  // Footpaths meet the bridge landings on both ends of every cross-island journey.
+  for (const [aIndex, bIndex] of [
+    [0, 2],
+    [0, 3],
+    [2, 3],
+  ]) {
+    const a = defs[aIndex],
+      b = defs[bIndex],
+      length = Math.hypot(b.x - a.x, b.z - a.z);
+    for (const [from, to] of [
+      [a, b],
+      [b, a],
+    ]) {
+      const dx = (to.x - from.x) / length,
+        dz = (to.z - from.z) / length;
+      const points = [[0, 1.6]];
+      if (dz < -0.1) points.push([2.4, 1.4], [2.4, -2.1]);
+      points.push([dx * 5.64, dz * 5.64]);
+      curvedPath(points, groups[from.id], 0.65);
+    }
+  }
   const residents = [];
   function plush(type, color, shirt, p, x, z, phase) {
     const g = new T.Group();
     p.add(g);
-    g.scale.setScalar(0.7);
+    g.scale.setScalar(0.85);
     ball(0.32, color, 0, 0.43, 0, g, [1, 1.2, 0.8]);
     ball(0.41, color, 0, 1.02, 0.025, g, [1, 0.9, 0.9]);
+    const arms = [];
     for (const s of [-1, 1]) {
       if (type === "rabbit") {
         const ear = ball(0.115, color, s * 0.2, 1.5, 0, g, [1, 2.6, 0.8]);
@@ -720,7 +825,7 @@ export function createWorld(container, onSelect, icon) {
       }
       ball(0.028, "#514a3c", s * 0.145, 1.06, 0.36, g);
       ball(0.065, "#d9a398", s * 0.27, 0.96, 0.32, g, [1, 0.5, 0.25]);
-      ball(0.12, color, s * 0.34, 0.52, 0, g, [0.8, 1.5, 0.8]);
+      arms.push(ball(0.12, color, s * 0.34, 0.52, 0, g, [0.8, 1.5, 0.8]));
     }
     ball(0.2, "#f3e6cb", 0, 0.93, 0.3, g, [1, 0.7, 0.35]);
     ball(0.04, "#67533f", 0, 0.98, 0.38, g, [1, 0.7, 0.7]);
@@ -731,11 +836,11 @@ export function createWorld(container, onSelect, icon) {
       ball(0.135, color, 0.18, 0.1, 0.08, g, [1, 0.7, 1.4]),
     ];
     g.position.set(x, top, z);
-    residents.push({ g, feet, x, z, phase });
+    residents.push({ g, feet, arms });
   }
-  plush("bear", "#bb956e", "#90a080", friends, -0.3, 0.4, 0);
-  plush("rabbit", "#f0e0c9", "#d9a28f", friends, 0.8, 0.7, 2.1);
-  plush("bear", "#a9b18a", "#d8bc7c", home, 0.2, 1.65, 4.2);
+  plush("bear", "#bb956e", "#90a080", scene, 0, 0, 0);
+  plush("rabbit", "#f0e0c9", "#d9a28f", scene, 0, 0, 2.1);
+  plush("bear", "#a9b18a", "#d8bc7c", scene, 0, 0, 4.2);
   const clouds = [];
   for (const [x, y, z, s] of [
     [-9, 5, -7, 1],
@@ -819,34 +924,86 @@ export function createWorld(container, onSelect, icon) {
     reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let greetUntil = 0,
     greetIndex = 0;
-  let animationFrame;
+  let animationFrame,
+    lastFrameTime = 0;
   function animate() {
     animationFrame = requestAnimationFrame(animate);
     // Do not spend GPU time on scenery hidden behind journals or background tabs.
-    if (document.hidden || document.body.classList.contains("modal-open")) return;
+    if (document.hidden || document.body.classList.contains("modal-open"))
+      return;
     const t = clock.getElapsedTime();
     controls.update();
-    if (!reduced) {
+    const dt = Math.min(0.05, Math.max(0, t - lastFrameTime));
+    lastFrameTime = t;
+    const activityTime = reduced ? 0 : t;
+    const previousMode = life.mode;
+    if (!reduced) life.update(dt);
+    if (previousMode !== life.mode) updateActivityBadge();
+    {
       residents.forEach((r, i) => {
-        const a = t * 0.24 + r.phase;
-        r.g.position.x = r.x + Math.sin(a) * 1.6;
-        r.g.position.z = r.z + Math.cos(a) * 1.3;
-        r.g.rotation.y = a + Math.PI / 2;
-        r.g.position.y = top + Math.abs(Math.sin(t * 3 + i)) * 0.025;
-        r.feet.forEach(
-          (f, j) =>
-            (f.position.z = 0.08 + Math.sin(t * 3 + j * Math.PI) * 0.065),
-        );
-        if (t < greetUntil && i === greetIndex) {
-          r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.18;
-          r.g.rotation.y = 0.5;
+        const actor = life.actors[i];
+        let bridgeLift = 0;
+        for (const bridge of [
+          { x: 0.2, z: 3.5 },
+          { x: 0.45, z: PARK.z + 1.1 },
+        ]) {
+          if (
+            actor.state === "walking" &&
+            Math.abs(actor.x - bridge.x) < 0.55 &&
+            Math.abs(actor.z - bridge.z) < 1
+          )
+            bridgeLift =
+              0.28 + Math.cos(((actor.z - bridge.z) * Math.PI) / 2) * 0.1;
+        }
+        r.g.position.set(actor.x, top + actor.yOffset + bridgeLift, actor.z);
+        r.g.rotation.set(0, actor.heading, 0);
+        const seated = actor.state === "swinging";
+        r.feet.forEach((foot, j) => {
+          foot.position.y = seated ? 0.23 : 0.1;
+          foot.position.z = seated
+            ? 0.3
+            : 0.08 +
+              (actor.state === "walking"
+                ? Math.sin(actor.walkTime * 8 + j * Math.PI) * 0.09
+                : 0);
+        });
+        r.arms.forEach((arm, j) => {
+          arm.rotation.x = seated
+            ? -1.1
+            : actor.state === "pushing"
+              ? -0.8 + Math.sin(activityTime * 1.7) * 0.25
+              : 0;
+          arm.rotation.z =
+            actor.state === "playing" ? Math.sin(activityTime * 4 + j) * 0.5 : 0;
+        });
+        if (!reduced && t < greetUntil && i === greetIndex && !seated) {
+          r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.14;
+          r.arms[1].rotation.z = -1.2 + Math.sin(t * 7) * 0.4;
         }
       });
-      clouds.forEach(
-        (c, i) => (c.g.position.x = c.x + Math.sin(t * 0.07 + i) * 0.4),
+      swingPivots.forEach((pivot, slot) => {
+        const rider = life.actors.find(
+          (actor) => actor.slot === slot && actor.state === "swinging",
+        );
+        // Positive rotation moves the seat toward positive Z.
+        pivot.rotation.x = -(rider?.swingAngle || 0);
+      });
+      const playing = life.actors.some((actor) => actor.state === "playing");
+      playBall.position.set(
+        PARK.play.x + (playing ? Math.cos(life.elapsed * 1.1) * 0.75 : 0),
+        top +
+          0.23 +
+          (playing ? Math.abs(Math.sin(life.elapsed * 3)) * 0.45 : 0),
+        PARK.play.z + (playing ? Math.sin(life.elapsed * 1.1) * 0.75 : 0),
       );
-      boat.position.y = -0.45 + Math.sin(t * 1.3) * 0.035;
-      boat.rotation.z = Math.sin(t) * 0.025;
+      playBall.rotation.z = playing ? life.elapsed * 2 : 0;
+      if (!reduced) {
+        clouds.forEach(
+          (c, i) => (c.g.position.x = c.x + Math.sin(t * 0.07 + i) * 0.4),
+        );
+        boat.position.y = -0.45 + Math.sin(t * 1.3) * 0.035;
+        boat.rotation.z = Math.sin(t) * 0.025;
+      }
     }
     for (const marker of flowMarkers) {
       const point = marker.curve.getPoint(
@@ -864,7 +1021,7 @@ export function createWorld(container, onSelect, icon) {
       );
       const y = T.MathUtils.clamp(
         (-p.y * 0.5 + 0.5) * height,
-        l.el.offsetHeight + 12,
+        l.el.offsetHeight + 95,
         height - 20,
       );
       l.el.style.transform = `translate(-50%,-100%) translate(${x}px,${y}px)`;
@@ -916,6 +1073,16 @@ export function createWorld(container, onSelect, icon) {
       camera.updateProjectionMatrix();
     },
     focusIsland() {},
+    getResidentActivities() {
+      return life.descriptions();
+    },
+    watchResidents() {
+      const actor = life.actors[0];
+      const target = life.mode === "wander" ? actor : { x: PARK.x, z: PARK.z + 1.5 };
+      controls.target.set(target.x, 0.8, target.z);
+      camera.zoom = 2.8;
+      camera.updateProjectionMatrix();
+    },
     tour() {
       camera.zoom = Math.max(defaultZoom, 1.2);
       camera.updateProjectionMatrix();
