@@ -22,7 +22,7 @@ test("3D map, zoom, rotation, and island navigation work", async ({ page }) => {
   await page.getByRole("button", { name: "重設視角" }).click();
   await page.locator(".label-friends").click();
   await expect(page.locator("#panel-title")).toHaveText("家人朋友島");
-  await expect(page.locator(".resident-card")).toHaveCount(4);
+  await expect(page.locator(".resident-card")).toHaveCount(5);
   await page.getByRole("button", { name: "打個招呼" }).first().click();
   await expect(page.locator("#toast")).toContainText("奶茶小熊");
   await page.keyboard.press("Escape");
@@ -377,7 +377,7 @@ test("resident activities differ after refresh and the watch button brings them 
   await expect(page.locator(".map-expanded")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.locator(".label-friends").click();
-  await expect(page.locator(".resident-status")).toHaveCount(4);
+  await expect(page.locator(".resident-status")).toHaveCount(5);
   await expect(page.locator(".resident-status").first()).toContainText(
     /散步|風景|鞦韆|玩球/,
   );
@@ -616,7 +616,7 @@ test("photo bear joins an existing household without resetting family data", asy
   await page.reload();
   await expect(page.locator(".map-label")).toHaveCount(4);
   await page.locator('.island-card[data-open="friends"]').click();
-  await expect(page.locator(".resident-card")).toHaveCount(4);
+  await expect(page.locator(".resident-card")).toHaveCount(5);
   const bear=page.locator(".resident-card").filter({hasText:"熊熊"});
   await expect(bear.getByRole("img")).toHaveAttribute("aria-label","熊熊");
   await bear.getByRole("button",{name:"打個招呼"}).click();
@@ -626,18 +626,18 @@ test("photo bear joins an existing household without resetting family data", asy
   await page.locator("#todo-text").fill("和新朋友一起散步");
   await page.locator("#todo-form").getByRole("button",{name:"新增"}).click();
   const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem("little-island-v1")));
-  expect(stored.residents).toHaveLength(4);
+  expect(stored.residents).toHaveLength(5);
   expect(stored.todos.some(todo=>todo.id==="keep-todo")).toBe(true);
   expect(stored.notes[0].id).toBe("keep-note");
   expect(stored.memories[0].id).toBe("keep-memory");
   await page.reload();
   await page.locator('.island-card[data-open="friends"]').click();
-  await expect(page.locator(".resident-card")).toHaveCount(4);
+  await expect(page.locator(".resident-card")).toHaveCount(5);
 });
 
 test("each resident portrait immediately opens its own close-up and manual movement releases tracking", async ({page}) => {
   test.setTimeout(90000);
-  const names=["奶茶小熊","棉花小兔","抹茶小熊","熊熊"];
+  const names=["奶茶小熊","棉花小兔","抹茶小熊","熊熊","呱呱"];
   for (const [index,name] of names.entries()) {
     await page.locator('.island-card[data-open="friends"]').click();
     const portrait=page.getByRole("button",{name:`放大查看${name}`,exact:true});
@@ -647,9 +647,9 @@ test("each resident portrait immediately opens its own close-up and manual movem
     await expect(page.locator(".map-expanded")).toBeVisible();
     await expect(page.locator("#world")).toHaveAttribute("data-focused-resident",String(index));
     await expect(page.locator("#toast")).toContainText(name);
-    if (index===3) {
+    if (index===4) {
       await page.waitForTimeout(1500);
-      await page.screenshot({path:"/tmp/bear-focused-final.png"});
+      await page.screenshot({path:"/tmp/frog-focused-final.png"});
     }
     await page.keyboard.press("Escape");
   }

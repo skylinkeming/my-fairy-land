@@ -96,7 +96,7 @@ export function createResidentLife({
   links,
   previous,
   random = Math.random,
-  count = 4,
+  count = 5,
 }) {
   const indices = Array.from({ length: count }, (_, i) => i);
   const order = [...indices].sort(() => random() - 0.5);

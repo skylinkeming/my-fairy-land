@@ -1,4 +1,5 @@
 import * as T from "three";
+import { createFrog } from "./frog.js";
 import { createFloralBear } from "./floral-bear.js";
 import { createPlushArt } from "./plush-art.js";
 import {
@@ -861,6 +862,9 @@ export function createWorld(
   const floralBear = createFloralBear(plushArt);
   scene.add(floralBear.g);
   residents.push(floralBear);
+  const frog = createFrog(plushArt);
+  scene.add(frog.g);
+  residents.push(frog);
   const clouds = [];
   for (const [x, y, z, s] of [
     [-9, 5, -7, 1],
@@ -1163,6 +1167,7 @@ export function createWorld(
         object.geometry?.dispose();
       });
       for (const material of mats.values()) material.dispose();
+      frog.dispose();
       floralBear.dispose();
       plushArt.dispose();
       renderer.dispose();

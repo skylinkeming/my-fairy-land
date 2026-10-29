@@ -61,7 +61,7 @@ test("all islands have connected walking routes that cross the existing bridge c
 test("walking residents move continuously and actually arrive on another island", () => {
   const life = createResidentLife({ nodes, links, random: () => 0.1 });
   assert.equal(life.mode, "wander");
-  assert.equal(life.actors.length, 4);
+  assert.equal(life.actors.length, 5);
   const starts = life.actors.map((a) => a.node);
   let arrived = false;
   for (let step = 0; step < 450; step++) {
@@ -78,7 +78,7 @@ test("walking residents move continuously and actually arrive on another island"
     "at least one resident must finish crossing to another island",
   );
 });
-test("two residents ride the swings together while two friends join them", () => {
+test("two residents ride the swings together while three friends join them", () => {
   const life = createResidentLife({
     nodes,
     links,
@@ -89,7 +89,7 @@ test("two residents ride the swings together while two friends join them", () =>
   life.update(0.5);
   const riders = life.actors.filter((a) => a.state === "swinging");
   assert.equal(riders.length, 2);
-  assert.equal(life.actors.filter((a) => a.state === "pushing").length, 2);
+  assert.equal(life.actors.filter((a) => a.state === "pushing").length, 3);
   for (const rider of riders) {
     assert.notEqual(rider.swingAngle, 0);
     assert.ok(rider.yOffset > 0);
