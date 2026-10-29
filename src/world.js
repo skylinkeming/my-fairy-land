@@ -24,15 +24,14 @@ export function createWorld(
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   const scene = new T.Scene(),
-    camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 120);
+    camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 240);
   camera.position.set(42, 53, 65);
   let defaultZoom = innerWidth <= 760 ? 1.4 : 1;
   camera.zoom = defaultZoom;
   const controls = new OrbitControls(camera, canvas);
-  controls.enablePan = false;
   controls.enableDamping = true;
   controls.minZoom = 0.68;
-  controls.maxZoom = 4.5;
+  controls.maxZoom = 8;
   controls.enablePan = true;
   controls.screenSpacePanning = false;
   controls.minPolarAngle = 0.4;
@@ -141,13 +140,13 @@ export function createWorld(
   });
   // A blue maritime board with a layered timber frame replaces the soft lagoon.
   for (const [radius, y, height, color] of [
-    [32.4, -1.12, 0.45, "#68462e"],
-    [31.9, -0.88, 0.1, "#c5a56c"],
-    [31.3, -0.81, 0.06, "#347387"],
+    [48.4, -1.12, 0.45, "#68462e"],
+    [47.9, -0.88, 0.1, "#c5a56c"],
+    [47.3, -0.81, 0.06, "#347387"],
   ]) {
     const board = cyl(radius, radius, height, color, 0, y, 1, scene, 6);
     board.rotation.y = 0;
-    if (radius === 31.3)
+    if (radius === 47.3)
       board.material = [
         mat("#28566b"),
         new T.MeshStandardMaterial({
@@ -156,7 +155,7 @@ export function createWorld(
         }),
         mat("#28566b"),
       ];
-    if (radius === 32.4) board.material = woodMaterial();
+    if (radius === 48.4) board.material = woodMaterial();
   }
   const shadow = new T.Mesh(
     new T.PlaneGeometry(140, 140),
@@ -1064,6 +1063,7 @@ export function createWorld(
       );
       reminderButton.style.transform = `translate(-50%,0) translate(${x}px,${y}px)`;
     }
+    const placedLabels = [];
     for (const l of labels) {
       const p = l.point.clone().project(camera);
       const half = l.el.offsetWidth / 2 + 8;
@@ -1072,11 +1072,22 @@ export function createWorld(
         half,
         width - half,
       );
-      const y = T.MathUtils.clamp(
+      const labelHeight = l.el.offsetHeight;
+      const preferredY = T.MathUtils.clamp(
         (-p.y * 0.5 + 0.5) * height,
-        l.el.offsetHeight + 95,
+        labelHeight + 95,
         height - 20,
       );
+      // Keep offscreen island links separate when their anchors reach an edge.
+      const candidates = [preferredY];
+      for (let y = labelHeight + 95; y <= height - 20; y += labelHeight + 8)
+        candidates.push(y);
+      candidates.sort((a, b) => Math.abs(a - preferredY) - Math.abs(b - preferredY));
+      const y = candidates.find((candidate) => placedLabels.every((other) =>
+        x + half <= other.left || x - half >= other.right ||
+        candidate + 8 <= other.top || candidate - labelHeight >= other.bottom + 8
+      )) ?? preferredY;
+      placedLabels.push({ left: x - half, right: x + half, top: y - labelHeight, bottom: y });
       l.el.style.transform = `translate(-50%,-100%) translate(${x}px,${y}px)`;
     }
     const p = new T.Vector3(0, 1.1, PARK.z).project(camera);
@@ -1123,8 +1134,13 @@ export function createWorld(
       renderer.dispose();
     },
     zoom(f) {
-      camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 4.5);
+      camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 8);
       camera.updateProjectionMatrix();
+    },
+    setPanMode(enabled) {
+      controls.mouseButtons.LEFT = enabled ? T.MOUSE.PAN : T.MOUSE.ROTATE;
+      controls.touches.ONE = enabled ? T.TOUCH.PAN : T.TOUCH.ROTATE;
+      canvas.style.cursor = enabled ? "grab" : "";
     },
     reset() {
       controls.reset();
@@ -1142,7 +1158,10 @@ export function createWorld(
       const actor = life.actors[0];
       const target =
         life.mode === "wander" ? actor : { x: PARK.x, z: PARK.z + 1.5 };
-      controls.target.set(target.x, 0.8, target.z);
+      const nextTarget = new T.Vector3(target.x, 0.8, target.z);
+      camera.position.add(nextTarget.clone().sub(controls.target));
+      controls.target.copy(nextTarget);
+      controls.update();
       camera.zoom = 2.8;
       camera.updateProjectionMatrix();
     },

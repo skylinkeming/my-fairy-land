@@ -570,3 +570,31 @@ test("calendar task text can be edited while the checkboxes remain independent",
       .getByRole("checkbox"),
   ).not.toBeChecked();
 });
+
+
+test("map move mode pans the enlarged view and can return to rotation", async ({ page }) => {
+  test.setTimeout(90000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.locator("#map-expand").click();
+  await page.locator("#map-pan").click();
+  await expect(page.locator("#map-pan")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#world-canvas")).toHaveCSS("cursor", "grab");
+  const canvas = page.locator("#world-canvas");
+  const r = await canvas.boundingBox();
+  const before = await page.locator(".label-todo").getAttribute("style");
+  await page.mouse.move(r.x + r.width * .5, r.y + r.height * .72);
+  await page.mouse.down();
+  await page.mouse.move(r.x + r.width * .65, r.y + r.height * .72, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  await expect(page.locator(".label-todo")).not.toHaveAttribute("style", before);
+  for (let i = 0; i < 10; i++) await page.locator("#zoom-in").click();
+  await page.locator("#map-pan").click();
+  await expect(page.locator("#map-pan")).toHaveAttribute("aria-pressed", "false");
+  await page.locator("#reset").click();
+  await expect(page.locator("#modal")).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const controls = await page.locator(".map-controls").boundingBox();
+  expect(controls.x).toBeGreaterThanOrEqual(0);
+  expect(controls.x + controls.width).toBeLessThanOrEqual(390);
+});

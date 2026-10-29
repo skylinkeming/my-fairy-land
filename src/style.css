@@ -3371,3 +3371,16 @@ footer {
   }
 }
 .memory-form .primary-button{background:#827258;color:#fff1d1}.memory-form input,.memory-form textarea{border-color:#d6c5a2;background:#fff7e7}.photo-upload{background:#f7edda;border-color:#bda77e}.photo-upload>div{color:#a38b65}.photo-upload span{color:#b6a17c}.memory-meta{color:#ab9876}.polaroid{background:#fff5df;border-color:#dfcba8}.polaroid h3{color:#7a6446}.polaroid p,.memory-empty p{color:#a08b6a}.memory-empty h3{color:#9c835d}
+
+.map-expand-button[aria-pressed="true"] {
+  background: #dfc798;
+  color: #583e29;
+}
+@media (max-width: 760px) {
+  .map-controls {
+    max-width: 92%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .map-controls > button { flex-shrink: 0; }
+}
