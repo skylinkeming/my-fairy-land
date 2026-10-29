@@ -10,30 +10,34 @@ export function createWorld(container, onSelect, icon) {
   renderer.outputColorSpace = T.SRGBColorSpace;
   const scene = new T.Scene(),
     camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 120);
-  camera.position.set(18, 23, 27);
+  camera.position.set(42, 53, 65);
+  let defaultZoom = innerWidth <= 760 ? 1.4 : 1;
+  camera.zoom = defaultZoom;
   const controls = new OrbitControls(camera, canvas);
   controls.enablePan = false;
   controls.enableDamping = true;
   controls.minZoom = 0.68;
-  controls.maxZoom = 1.85;
+  controls.maxZoom = 4.5;
+  controls.enablePan = true;
+  controls.screenSpacePanning = false;
   controls.minPolarAngle = 0.4;
   controls.maxPolarAngle = 1.22;
-  controls.target.set(0, 0.1, 0);
+  controls.target.set(0, 0.1, 1.8);
   controls.rotateSpeed = 0.55;
   controls.update();
   controls.saveState();
   scene.add(new T.AmbientLight(0xfff9e9, 2.3));
   const sun = new T.DirectionalLight(0xfff4df, 3.2);
-  sun.position.set(-12, 25, 14);
+  sun.position.set(-25, 55, 32);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, {
-    left: -20,
-    right: 20,
-    top: 20,
-    bottom: -20,
+    left: -40,
+    right: 40,
+    top: 40,
+    bottom: -40,
     near: 1,
-    far: 70,
+    far: 130,
   });
   sun.shadow.normalBias = 0.06;
   sun.shadow.bias = -0.0001;
@@ -66,6 +70,8 @@ export function createWorld(container, onSelect, icon) {
     m.position.set(x, y, z);
     return m;
   }
+  // Radius × 2.4 gives every original hexagon 5.76 times its land area.
+  const landScale = 2.4;
   const top = 0.67,
     defs = [
       { id: "home", x: 0, z: 0, c: "#afc588" },
@@ -77,6 +83,8 @@ export function createWorld(container, onSelect, icon) {
     groups = {},
     selectable = [];
   defs.forEach((d) => {
+    d.x *= landScale;
+    d.z *= landScale;
     const g = new T.Group();
     g.position.set(d.x, 0, d.z);
     scene.add(g);
@@ -86,7 +94,7 @@ export function createWorld(container, onSelect, icon) {
       [3.04, 2.95, 0.23, "#efdeb1", 0.38],
       [2.93, 3.02, 0.22, d.c, 0.56],
     ]) {
-      const m = cyl(r, b, h, c, 0, y, 0, g, 6);
+      const m = cyl(r * landScale, b * landScale, h, c, 0, y, 0, g, 6);
       m.rotation.y = Math.PI / 6;
       if (y === 0.56) {
         m.userData.id = d.id;
@@ -98,9 +106,9 @@ export function createWorld(container, onSelect, icon) {
       ball(
         0.17,
         "#bfa984",
-        Math.cos(a) * 2.65,
+        Math.cos(a) * 2.65 * landScale,
         -0.5,
-        Math.sin(a) * 2.65,
+        Math.sin(a) * 2.65 * landScale,
         g,
         [1, 0.6, 0.7],
       );
@@ -108,7 +116,7 @@ export function createWorld(container, onSelect, icon) {
   });
   for (let i = 3; i >= 0; i--) {
     const w = new T.Mesh(
-      new T.CircleGeometry(12.3 + i * 0.8, 64),
+      new T.CircleGeometry((12.3 + i * 0.8) * landScale, 64),
       new T.MeshBasicMaterial({
         color: ["#aecfbe", "#c2d9c5", "#d9e4d0", "#ebeedf"][i],
         transparent: true,
@@ -120,7 +128,7 @@ export function createWorld(container, onSelect, icon) {
     scene.add(w);
   }
   const shadow = new T.Mesh(
-    new T.PlaneGeometry(60, 60),
+    new T.PlaneGeometry(140, 140),
     new T.ShadowMaterial({ opacity: 0.12 }),
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -389,7 +397,7 @@ export function createWorld(container, onSelect, icon) {
   function bridge(a, b) {
     const dx = b.x - a.x,
       dz = b.z - a.z,
-      len = Math.max(0.8, Math.hypot(dx, dz) - 4.7),
+      len = Math.max(0.8, Math.hypot(dx, dz) - 4.7 * landScale),
       g = new T.Group();
     g.position.set((a.x + b.x) / 2, top - 0.05, (a.z + b.z) / 2);
     g.rotation.y = Math.atan2(dx, dz);
@@ -419,18 +427,24 @@ export function createWorld(container, onSelect, icon) {
     [2, 3],
   ].forEach(([a, b]) => bridge(defs[a], defs[b]));
   const garden = new T.Group();
-  garden.position.set(0.6, -0.22, 5.55);
+  garden.position.set(0, 0, 13.8);
+  garden.name = "riverside-park";
   scene.add(garden);
-  cyl(1.35, 1.1, 0.6, "#cfbb91", 0, 0, 0, garden, 6);
-  cyl(1.34, 1.34, 0.12, "#b0c594", 0, 0.35, 0, garden, 6);
-  tree(0, -0.2, 0.58, garden, 1);
-  flowers(0.4, 0.45, garden, "#fff0c5", 5);
-  for (let i = 0; i < 7; i++)
-    box(1.1, 0.12, 0.2, "#c4a579", 6.2, -0.12, 3.1 + i * 0.23);
-  for (const x of [5.75, 6.65])
-    for (const z of [3.1, 4.5]) cyl(0.065, 0.07, 0.65, "#ae906b", x, -0.13, z);
+  for (const [radius, bottom, height, color, y] of [
+    [7.08, 6.36, 1.18, "#c8ae80", -0.12],
+    [7.3, 7.08, 0.23, "#efdeb1", 0.38],
+    [7.03, 7.25, 0.22, "#b4c991", 0.56],
+  ]) {
+    const terrain = cyl(radius, bottom, height, color, 0, y, 0, garden, 6);
+    terrain.rotation.y = Math.PI / 6;
+  }
+  bridge(defs[0], { x: 0, z: 13.8 });
+  for (let i = 0; i < 12; i++)
+    box(1.4, 0.12, 0.24, "#c4a579", 14.8, -0.12, 7 + i * 0.25);
+  for (const x of [14.15, 15.45])
+    for (const z of [7, 9.8]) cyl(0.08, 0.09, 0.65, "#ae906b", x, -0.13, z);
   const boat = new T.Group();
-  boat.position.set(7.25, -0.46, 4.8);
+  boat.position.set(16.8, -0.46, 10.2);
   boat.rotation.y = -0.6;
   scene.add(boat);
   ball(0.6, "#e9d3a3", 0, 0, 0, boat, [0.55, 0.35, 1.5]);
@@ -448,6 +462,246 @@ export function createWorld(container, onSelect, icon) {
   );
   sail.position.set(0.03, 0.4, -0.15);
   boat.add(sail);
+  const flowMarkers = [];
+  function ribbon(curve, width, y, color, parent) {
+    const points = curve.getPoints(70),
+      vertices = [],
+      indices = [];
+    points.forEach((point, i) => {
+      const tangent = curve.getTangent(i / 70);
+      const normal = new T.Vector3(-tangent.z, 0, tangent.x).normalize();
+      for (const side of [-1, 1])
+        vertices.push(
+          point.x + (normal.x * width * side) / 2,
+          y,
+          point.z + (normal.z * width * side) / 2,
+        );
+      if (i < 70) {
+        const j = i * 2;
+        indices.push(j, j + 2, j + 1, j + 1, j + 2, j + 3);
+      }
+    });
+    const geometry = new T.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new T.Float32BufferAttribute(vertices, 3),
+    );
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    const strip = mesh(geometry, color, parent);
+    strip.material = new T.MeshStandardMaterial({
+      color,
+      roughness: 0.8,
+      side: T.DoubleSide,
+    });
+    strip.castShadow = false;
+    return strip;
+  }
+  function curvedPath(points, parent, width = 0.75) {
+    const curve = new T.CatmullRomCurve3(
+      points.map(([x, z]) => new T.Vector3(x, 0, z)),
+    );
+    ribbon(curve, width, top + 0.025, "#e5d6ad", parent);
+  }
+  function river(points, parent, width = 1) {
+    const curve = new T.CatmullRomCurve3(
+      points.map(([x, z]) => new T.Vector3(x, 0, z)),
+    );
+    ribbon(curve, width + 0.32, top + 0.035, "#e9dbb6", parent);
+    const stream = ribbon(curve, width, top + 0.06, "#91c6bb", parent);
+    stream.name = "winding-river";
+    for (let i = 0; i < 7; i++) {
+      const glint = new T.Mesh(
+        new T.CircleGeometry(0.11, 10),
+        new T.MeshBasicMaterial({
+          color: "#d9eee0",
+          transparent: true,
+          opacity: 0.7,
+        }),
+      );
+      glint.rotation.x = -Math.PI / 2;
+      glint.scale.set(2.5, 0.4, 1);
+      parent.add(glint);
+      flowMarkers.push({ glint, curve, offset: i / 7 });
+    }
+    return curve;
+  }
+  function hill(x, z, s, parent) {
+    const mound = ball(1, "#9dbb80", x, top - 0.1, z, parent, [
+      s,
+      s * 0.65,
+      s * 0.82,
+    ]);
+    mound.name = "grassy-hill";
+    ball(1, "#b4cb91", x - s * 0.5, top - 0.12, z + s * 0.2, parent, [
+      s * 0.7,
+      s * 0.4,
+      s * 0.67,
+    ]);
+    tree(x - s * 0.8, z - 0.5, 0.9, parent, 1);
+  }
+  function footbridge(x, z, parent, rotation = 0) {
+    const g = new T.Group();
+    g.position.set(x, top + 0.18, z);
+    g.rotation.y = rotation;
+    parent.add(g);
+    for (let i = 0; i < 12; i++)
+      box(
+        0.95,
+        0.1,
+        0.15,
+        "#c4a071",
+        0,
+        Math.sin((i / 11) * Math.PI) * 0.15,
+        -0.9 + i * 0.16,
+        g,
+      );
+    for (const side of [-1, 1]) {
+      for (const z of [-0.9, 0, 0.9])
+        cyl(0.04, 0.05, 0.68, "#ae8f68", side * 0.5, 0.33, z, g, 6);
+      box(0.055, 0.06, 1.9, "#d6b789", side * 0.5, 0.65, 0, g);
+    }
+  }
+  // The extra land is usable countryside rather than scaled-up buildings.
+  Object.entries(groups).forEach(([id, group], index) => {
+    curvedPath(
+      [
+        [-5.6, 0],
+        [-3.4, 0.4],
+        [0, 1.6],
+        [3.8, 1],
+        [5.7, 0],
+      ],
+      group,
+    );
+    hill(-3.6, -3.25, 1.65, group);
+    for (let i = 0; i < 7; i++) {
+      const angle = 0.3 + i * 0.82;
+      tree(
+        Math.cos(angle) * 5,
+        Math.sin(angle) * 4.7,
+        0.72 + (i % 3) * 0.16,
+        group,
+        i % 3 === 0 ? 1 : 0,
+      );
+    }
+    bench(3.8, 2.8, group, -0.6);
+    lamp(3.3, 2.6, group);
+    flowers(-3.7, 2.7, group, index % 2 ? "#eab5a5" : "#f2e5b1", 6);
+    flowers(3.2, -3, group, "#d1b4c9", 6);
+    fence(-2.5, 4.9, 5, group);
+  });
+  river(
+    [
+      [-6, 1.4],
+      [-4.2, 2],
+      [-2.4, 3.2],
+      [0, 3.5],
+      [2.6, 3],
+      [4.5, 2.2],
+      [6, 1.3],
+    ],
+    home,
+    1.05,
+  );
+  footbridge(0.2, 3.5, home, 0.2);
+  curvedPath(
+    [
+      [0, 1.5],
+      [0.2, 3.5],
+      [0, 5.9],
+    ],
+    home,
+    0.8,
+  );
+  house(todo, { x: 3.5, z: -2.8, w: 1.65, h: 1.25, d: 1.4, roof: "#b2a178" });
+  house(note, {
+    x: 3.7,
+    z: 1,
+    w: 1.5,
+    h: 1.25,
+    d: 1.3,
+    roof: "#a3ae89",
+    wall: "#f0e5c6",
+  });
+  hill(3.4, -3.4, 1.5, mem);
+  // Riverside central park: an open lawn, twin hills, promenade and picnic pavilion.
+  river(
+    [
+      [-6.1, -1.1],
+      [-4, -0.8],
+      [-2, 0.3],
+      [0, 1.2],
+      [2.1, 0.8],
+      [4, -0.4],
+      [6.1, -1.2],
+    ],
+    garden,
+    1.4,
+  );
+  hill(-2.6, -3.4, 2, garden);
+  hill(2, -3.8, 1.5, garden);
+  curvedPath(
+    [
+      [-4.9, 1.2],
+      [-2.5, 2.4],
+      [0, 3.2],
+      [3, 2.8],
+      [4.8, 1.4],
+    ],
+    garden,
+    0.9,
+  );
+  curvedPath(
+    [
+      [0, -6],
+      [0.4, -3],
+      [0.5, 0],
+      [0.3, 3.2],
+      [0, 5.6],
+    ],
+    garden,
+    0.8,
+  );
+  footbridge(0.45, 1.1, garden, 0.05);
+  footbridge(-4.3, -0.8, garden, -0.5);
+  for (const [x, z] of [
+    [-5, -2.6],
+    [-4, 3.3],
+    [-2.7, 4.5],
+    [4.9, 2.4],
+    [4.7, -3.1],
+  ])
+    tree(x, z, 0.85, garden);
+  for (const [x, z, r] of [
+    [-2, 2.2, 0.1],
+    [2.5, 3.3, -0.3],
+    [-4.5, 1.4, 1.1],
+  ])
+    bench(x, z, garden, r);
+  flowers(-2, 3.9, garden, "#e7b6b3", 8);
+  flowers(3.9, 1.9, garden, "#f7e8ad", 8);
+  lamp(-1.3, 2.3, garden);
+  lamp(2.8, 2.4, garden);
+  // A hexagonal gazebo with a warm terracotta roof.
+  cyl(1.05, 1.1, 0.14, "#e8d6b0", -3.8, top + 0.1, 2.7, garden, 6);
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    cyl(
+      0.045,
+      0.06,
+      1.6,
+      "#c8ac7b",
+      -3.8 + Math.cos(a) * 0.82,
+      top + 0.95,
+      2.7 + Math.sin(a) * 0.82,
+      garden,
+      6,
+    );
+  }
+  cyl(0, 1.25, 0.85, "#ba8c70", -3.8, top + 2.05, 2.7, garden, 6);
+  container.dataset.landAreaMultiplier = String(landScale ** 2);
+  container.dataset.scenery = "park hills river";
   const residents = [];
   function plush(type, color, shirt, p, x, z, phase) {
     const g = new T.Group();
@@ -489,8 +743,8 @@ export function createWorld(container, onSelect, icon) {
     [-7, 4, 6, 0.6],
   ]) {
     const g = new T.Group();
-    g.position.set(x, y, z);
-    g.scale.setScalar(s);
+    g.position.set(x * landScale, y + 2, z * landScale);
+    g.scale.setScalar(s * 1.4);
     scene.add(g);
     for (const [a, b, c, r] of [
       [0, 0, 0, 0.8],
@@ -501,7 +755,7 @@ export function createWorld(container, onSelect, icon) {
       const m = ball(r, "#fff9e9", a, b, c, g, [1, 0.63, 0.75]);
       m.castShadow = false;
     }
-    clouds.push({ g, x });
+    clouds.push({ g, x: x * landScale });
   }
   for (let i = 0; i < 12; i++) {
     const a = i * 2.4;
@@ -516,9 +770,9 @@ export function createWorld(container, onSelect, icon) {
     r.rotation.x = -Math.PI / 2;
     r.rotation.z = a;
     r.position.set(
-      Math.cos(a) * (9 + (i % 3)),
+      Math.cos(a) * (9 + (i % 3)) * landScale,
       -0.78,
-      Math.sin(a) * (7 + (i % 3)) - 0.4,
+      (Math.sin(a) * (7 + (i % 3)) - 0.4) * landScale,
     );
     scene.add(r);
   }
@@ -534,11 +788,11 @@ export function createWorld(container, onSelect, icon) {
     el.innerHTML = `<span class="label-symbol">${icon(id)}</span><span><strong>${title}</strong><small>${sub}</small></span><span class="label-arrow">↗</span>`;
     el.onclick = () => onSelect(id);
     container.querySelector("#world-labels").append(el);
-    return { el, point: new T.Vector3(x, y, z) };
+    return { el, point: new T.Vector3(x * landScale, y + 1, z * landScale) };
   });
   const hl = document.createElement("div");
   hl.className = "home-label";
-  hl.textContent = "♡ 我們的家";
+  hl.textContent = "✿ 中央河畔公園";
   container.querySelector("#world-labels").append(hl);
   let width = 1,
     height = 1;
@@ -547,8 +801,11 @@ export function createWorld(container, onSelect, icon) {
     height = container.clientHeight;
     if (!width || !height) return;
     renderer.setSize(width, height, false);
+    const nextDefaultZoom = width < 600 ? 1.4 : 1;
+    if (camera.zoom === defaultZoom) camera.zoom = nextDefaultZoom;
+    defaultZoom = nextDefaultZoom;
     const aspect = width / height,
-      v = 10.1;
+      v = width < 600 ? 25 / Math.min(aspect, 1) : 22;
     camera.left = -v * aspect;
     camera.right = v * aspect;
     camera.top = v;
@@ -565,13 +822,15 @@ export function createWorld(container, onSelect, icon) {
   let animationFrame;
   function animate() {
     animationFrame = requestAnimationFrame(animate);
+    // Do not spend GPU time on scenery hidden behind journals or background tabs.
+    if (document.hidden || document.body.classList.contains("modal-open")) return;
     const t = clock.getElapsedTime();
     controls.update();
     if (!reduced) {
       residents.forEach((r, i) => {
         const a = t * 0.24 + r.phase;
-        r.g.position.x = r.x + Math.sin(a) * 0.52;
-        r.g.position.z = r.z + Math.cos(a) * 0.43;
+        r.g.position.x = r.x + Math.sin(a) * 1.6;
+        r.g.position.z = r.z + Math.cos(a) * 1.3;
         r.g.rotation.y = a + Math.PI / 2;
         r.g.position.y = top + Math.abs(Math.sin(t * 3 + i)) * 0.025;
         r.feet.forEach(
@@ -589,11 +848,28 @@ export function createWorld(container, onSelect, icon) {
       boat.position.y = -0.45 + Math.sin(t * 1.3) * 0.035;
       boat.rotation.z = Math.sin(t) * 0.025;
     }
+    for (const marker of flowMarkers) {
+      const point = marker.curve.getPoint(
+        ((reduced ? 0 : t) * 0.025 + marker.offset) % 1,
+      );
+      marker.glint.position.set(point.x, top + 0.08, point.z);
+    }
     for (const l of labels) {
       const p = l.point.clone().project(camera);
-      l.el.style.transform = `translate(-50%,-100%) translate(${(p.x * 0.5 + 0.5) * width}px,${(-p.y * 0.5 + 0.5) * height}px)`;
+      const half = l.el.offsetWidth / 2 + 8;
+      const x = T.MathUtils.clamp(
+        (p.x * 0.5 + 0.5) * width,
+        half,
+        width - half,
+      );
+      const y = T.MathUtils.clamp(
+        (-p.y * 0.5 + 0.5) * height,
+        l.el.offsetHeight + 12,
+        height - 20,
+      );
+      l.el.style.transform = `translate(-50%,-100%) translate(${x}px,${y}px)`;
     }
-    const p = new T.Vector3(0, 1.1, 1.25).project(camera);
+    const p = new T.Vector3(0, 1.1, 13.8).project(camera);
     hl.style.transform = `translate(-50%,0) translate(${(p.x * 0.5 + 0.5) * width}px,${(-p.y * 0.5 + 0.5) * height}px)`;
     renderer.render(scene, camera);
   }
@@ -631,17 +907,17 @@ export function createWorld(container, onSelect, icon) {
       renderer.dispose();
     },
     zoom(f) {
-      camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 1.85);
+      camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 4.5);
       camera.updateProjectionMatrix();
     },
     reset() {
       controls.reset();
-      camera.zoom = 1;
+      camera.zoom = defaultZoom;
       camera.updateProjectionMatrix();
     },
     focusIsland() {},
     tour() {
-      camera.zoom = 1.1;
+      camera.zoom = Math.max(defaultZoom, 1.2);
       camera.updateProjectionMatrix();
     },
     greet(i) {

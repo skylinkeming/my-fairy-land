@@ -2347,4 +2347,154 @@ input[type="date"] {
   }
 }
 
-.fallback-map{display:block;width:100%;height:100%;object-fit:contain}.fallback-badge{position:absolute;bottom:10%;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:1px;color:#859977;background:#f8f8efcc;border:1px solid #e3e8d6;border-radius:20px;padding:6px 12px;white-space:nowrap}.round-button:disabled{opacity:.35;cursor:default}.illustrated-world{touch-action:auto}
+.fallback-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.fallback-badge {
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #859977;
+  background: #f8f8efcc;
+  border: 1px solid #e3e8d6;
+  border-radius: 20px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+.round-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.illustrated-world {
+  touch-action: auto;
+}
+
+/* A larger explorable landscape, with a full-window view for closer walks. */
+@media (min-width: 761px) {
+  .hero {
+    grid-template-columns: 28% 72%;
+    min-height: 850px;
+    padding-left: 5%;
+  }
+  .hero-copy {
+    padding-top: 70px;
+  }
+  .world-wrap {
+    height: 810px;
+    margin-left: 0;
+  }
+  .hero h1 {
+    font-size: clamp(30px, 2.7vw, 40px);
+    letter-spacing: 1px;
+  }
+  .hero-description {
+    font-size: 11px;
+  }
+  .world-wrap #world {
+    inset: 20px 0 45px -20px;
+  }
+  .map-help {
+    left: 8%;
+    bottom: 7px;
+  }
+  .map-controls {
+    bottom: 32px;
+    right: 5%;
+  }
+  .map-caption {
+    bottom: 84px;
+  }
+  .islands-section {
+    margin-top: 14px;
+  }
+}
+.map-expand-button {
+  background: transparent;
+  color: #829573;
+  font-size: 10px;
+  letter-spacing: 0.7px;
+  border-radius: 5px;
+  padding: 9px 10px;
+}
+.map-expand-button:hover {
+  background: #e7eddc;
+}
+.map-open {
+  overflow: hidden;
+}
+.world-wrap.map-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+  background: #f4f6e9;
+}
+.world-wrap.map-expanded #world {
+  inset: 24px 16px 70px;
+}
+.world-wrap.map-expanded .weather-pill {
+  top: 20px;
+  right: 6%;
+}
+.world-wrap.map-expanded .map-controls {
+  right: 5%;
+  bottom: 22px;
+}
+.world-wrap.map-expanded .map-help {
+  left: 5%;
+  bottom: 33px;
+}
+.world-wrap.map-expanded .map-caption {
+  bottom: 80px;
+}
+.world-wrap.map-expanded:before {
+  inset: 0;
+}
+@media (max-width: 760px) {
+  .world-wrap {
+    height: 630px;
+  }
+  .map-controls {
+    right: 4%;
+    bottom: 12px;
+  }
+  .map-expand-button {
+    font-size: 9px;
+    padding: 7px;
+  }
+  .map-help {
+    left: 5%;
+    bottom: 58px;
+    font-size: 7px;
+  }
+  .map-caption {
+    bottom: 87px;
+  }
+  .world-wrap.map-expanded #world {
+    inset: 35px 0 100px;
+  }
+  .world-wrap.map-expanded .map-help {
+    bottom: 74px;
+  }
+  .world-wrap.map-expanded .map-caption {
+    bottom: 106px;
+  }
+  .world-wrap.map-expanded .map-controls {
+    bottom: 20px;
+    right: 5%;
+  }
+  .home-label {
+    font-size: 9px;
+  }
+}
+.hero:has(.map-expanded) {
+  z-index: 25;
+}

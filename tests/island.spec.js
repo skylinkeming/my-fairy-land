@@ -106,13 +106,11 @@ test("photo and text upload, lightbox, persistence and deletion", async ({
     x.fillRect(0, 0, 100, 80);
     return c.toDataURL("image/png").split(",")[1];
   });
-  await page
-    .locator("#memory-photo")
-    .setInputFiles({
-      name: "family.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(image, "base64"),
-    });
+  await page.locator("#memory-photo").setInputFiles({
+    name: "family.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(image, "base64"),
+  });
   await expect(page.locator("#photo-preview img")).toBeVisible();
   await page.locator("#memory-title").fill("一起去野餐");
   await page.locator("#memory-caption").fill("有陽光，也有你們。");
@@ -150,70 +148,156 @@ test("mobile layout and keyboard dialog navigation", async ({ page }) => {
   await expect(page.locator(".label-todo")).toBeFocused();
 });
 
-test('homepage and journals survive a failed 3D module request', async ({ page }) => {
-  await page.route('**/src/world.js*', route => route.abort());
+test("homepage and journals survive a failed 3D module request", async ({
+  page,
+}) => {
+  await page.route("**/src/world.js*", (route) => route.abort());
   await page.reload();
-  await expect(page.locator('h1')).toContainText('把日子過成');
-  await expect(page.locator('.fallback-map')).toBeVisible();
-  await page.locator('.label-todo').click();
-  await expect(page.locator('#todo-form')).toBeVisible();
+  await expect(page.locator("h1")).toContainText("把日子過成");
+  await expect(page.locator(".fallback-map")).toBeVisible();
+  await page.locator(".label-todo").click();
+  await expect(page.locator("#todo-form")).toBeVisible();
 });
 
-test('no WebGL renders an illustrated map and keeps the page usable', async ({page}) => {
+test("no WebGL renders an illustrated map and keeps the page usable", async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function(type,...args) {
-      if (type === 'webgl2' || type === 'webgl' || type === 'experimental-webgl') return null;
-      return original.call(this,type,...args);
+    HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+      if (
+        type === "webgl2" ||
+        type === "webgl" ||
+        type === "experimental-webgl"
+      )
+        return null;
+      return original.call(this, type, ...args);
     };
   });
   await page.reload();
-  await expect(page.locator('.fallback-map')).toBeVisible();
-  await expect(page.locator('h1')).toBeVisible();
-  await page.locator('.label-note').click();
-  await expect(page.locator('#note-form')).toBeVisible();
+  await expect(page.locator(".fallback-map")).toBeVisible();
+  await expect(page.locator("h1")).toBeVisible();
+  await page.locator(".label-note").click();
+  await expect(page.locator("#note-form")).toBeVisible();
 });
 
-test('GPU context loss switches to the usable illustrated map', async ({page}) => {
+test("GPU context loss switches to the usable illustrated map", async ({
+  page,
+}) => {
   await page.evaluate(() => {
-    document.querySelector('#world-canvas').getContext('webgl2').getExtension('WEBGL_lose_context').loseContext();
+    document
+      .querySelector("#world-canvas")
+      .getContext("webgl2")
+      .getExtension("WEBGL_lose_context")
+      .loseContext();
   });
-  await expect(page.locator('.fallback-map')).toBeVisible();
-  await page.locator('.label-memories').click();
-  await expect(page.locator('#memory-form')).toBeVisible();
+  await expect(page.locator(".fallback-map")).toBeVisible();
+  await page.locator(".label-memories").click();
+  await expect(page.locator("#memory-form")).toBeVisible();
 });
 
-test('failed main module shows a readable retry screen instead of an empty page', async ({page}) => {
-  await page.route('**/src/main.js*',route=>route.abort());
+test("failed main module shows a readable retry screen instead of an empty page", async ({
+  page,
+}) => {
+  await page.route("**/src/main.js*", (route) => route.abort());
   await page.reload();
-  await expect(page.locator('.boot-message')).toBeVisible();
-  await expect(page.locator('#boot-retry')).toBeVisible();
-  await expect(page.locator('#boot-status')).toContainText('頁面資源未能完整載入');
+  await expect(page.locator(".boot-message")).toBeVisible();
+  await expect(page.locator("#boot-retry")).toBeVisible();
+  await expect(page.locator("#boot-status")).toContainText(
+    "頁面資源未能完整載入",
+  );
 });
 
-test('todo island always reopens the list and shows only the last fourteen calendar days newest first', async ({page}) => {
-  await page.clock.setFixedTime(new Date('2026-10-29T04:00:00Z'));
+test("todo island always reopens the list and shows only the last fourteen calendar days newest first", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-10-29T04:00:00Z"));
   await page.evaluate(() => {
-    const now=Date.now();
-    const boundary=new Date(now);boundary.setHours(0,0,0,0);boundary.setDate(boundary.getDate()-13);
-    const todo=(id,text,created)=>({id,text,created,date:'2026-10-29',done:false});
-    localStorage.setItem('little-island-v1',JSON.stringify({
-      todos:[todo('old','兩週之前',boundary.getTime()-1),todo('edge','兩週起點',boundary.getTime()),todo('new','最新待辦',now-1000),todo('mid','昨天待辦',now-86400000)],
-      notes:[],memories:[],residents:[]
-    }));
+    const now = Date.now();
+    const boundary = new Date(now);
+    boundary.setHours(0, 0, 0, 0);
+    boundary.setDate(boundary.getDate() - 13);
+    const todo = (id, text, created) => ({
+      id,
+      text,
+      created,
+      date: "2026-10-29",
+      done: false,
+    });
+    localStorage.setItem(
+      "little-island-v1",
+      JSON.stringify({
+        todos: [
+          todo("old", "兩週之前", boundary.getTime() - 1),
+          todo("edge", "兩週起點", boundary.getTime()),
+          todo("new", "最新待辦", now - 1000),
+          todo("mid", "昨天待辦", now - 86400000),
+        ],
+        notes: [],
+        memories: [],
+        residents: [],
+      }),
+    );
   });
   await page.reload();
   await page.locator('.island-card[data-open="todo"]').click();
-  await expect(page.locator('.todo-text')).toHaveText(['最新待辦','昨天待辦','兩週起點']);
-  await page.getByRole('button',{name:'日曆',exact:true}).click();
-  await expect(page.locator('.calendar-task').filter({hasText:'兩週之前'})).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await page.locator('.label-todo').click();
-  await expect(page.locator('[data-view="list"]')).toHaveClass('active');
-  await expect(page.locator('.calendar-grid')).toHaveCount(0);
-  await expect(page.locator('.todo-text')).toHaveText(['最新待辦','昨天待辦','兩週起點']);
-  await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('little-island-v1'));s.todos=s.todos.filter(t=>t.id==='old');localStorage.setItem('little-island-v1',JSON.stringify(s));});
+  await expect(page.locator(".todo-text")).toHaveText([
+    "最新待辦",
+    "昨天待辦",
+    "兩週起點",
+  ]);
+  await page.getByRole("button", { name: "日曆", exact: true }).click();
+  await expect(
+    page.locator(".calendar-task").filter({ hasText: "兩週之前" }),
+  ).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await page.locator(".label-todo").click();
+  await expect(page.locator('[data-view="list"]')).toHaveClass("active");
+  await expect(page.locator(".calendar-grid")).toHaveCount(0);
+  await expect(page.locator(".todo-text")).toHaveText([
+    "最新待辦",
+    "昨天待辦",
+    "兩週起點",
+  ]);
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("little-island-v1"));
+    s.todos = s.todos.filter((t) => t.id === "old");
+    localStorage.setItem("little-island-v1", JSON.stringify(s));
+  });
   await page.reload();
   await page.locator('.island-card[data-open="todo"]').click();
-  await expect(page.locator('.empty-state')).toContainText('近兩週還沒有新增待辦');
+  await expect(page.locator(".empty-state")).toContainText(
+    "近兩週還沒有新增待辦",
+  );
+});
+
+test("expanded landscape fills the viewport and journals still work above it", async ({
+  page,
+}) => {
+  await expect(page.locator(".home-label")).toHaveText("✿ 中央河畔公園");
+  await page.getByRole("button", { name: "展開地圖 ↗", exact: true }).click();
+  await expect(page.locator("#map-expand")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const viewport = page.viewportSize();
+  const box = await page.locator(".world-wrap").boundingBox();
+  expect(box.x).toBe(0);
+  expect(box.y).toBe(0);
+  expect(box.width).toBe(viewport.width);
+  expect(box.height).toBe(viewport.height);
+  expect(
+    await page.evaluate(
+      () => document.elementFromPoint(10, 10).closest(".world-wrap") !== null,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "放大", exact: true }).click();
+  await page.getByRole("button", { name: "重設視角" }).click();
+  await page.locator(".label-note").click();
+  await expect(page.locator("#note-form")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".map-expanded")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".map-expanded")).toHaveCount(0);
+  await expect(page.locator("#map-expand")).toBeFocused();
 });
