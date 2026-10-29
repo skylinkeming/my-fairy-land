@@ -1025,10 +1025,10 @@ export function createWorld(
         r.g.rotation.set(0, actor.heading, 0);
         const seated = actor.state === "swinging";
         r.feet.forEach((foot, j) => {
-          foot.position.y = seated ? 0.23 : 0.1;
+          foot.position.y = seated ? 0.23 : (foot.userData.restY ?? 0.1);
           foot.position.z = seated
             ? 0.3
-            : 0.08 +
+            : (foot.userData.restZ ?? 0.08) +
               (actor.state === "walking"
                 ? Math.sin(actor.walkTime * 8 + j * Math.PI) * 0.09
                 : 0);

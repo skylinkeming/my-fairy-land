@@ -1,6 +1,6 @@
 import * as T from "three";
 
-// Four-view reference: pink plush, projecting muzzle, ivory underside, three felt fins.
+// Front and four angled references: pink plush, projecting muzzle, ivory underside, three felt fins.
 // The photographed key chain, attachment loop and sewn label are intentionally absent.
 export function createDinosaur(art) {
   const g = new T.Group();
@@ -37,21 +37,24 @@ export function createDinosaur(art) {
     fibers.instanceMatrix.needsUpdate = true;
     fibers.computeBoundingSphere();
   }
-  art.ball(.43, pink, 0, 1.25, .18, g, [.9, .97, 1.25]);
-  art.ball(.30, ivory, 0, .995, .33, g, [1.05, .32, 1.1]);
-  art.ball(.19, ivory, 0, .86, .205, g, [1, 1.25, .58]);
-  art.ball(.215, ivory, 0, .61, .16, g, [.94, 1.5, .58]);
+  art.ball(.43, pink, 0, 1.25, .18, g, [1.04, .97, 1.25]);
+  art.ball(.33, ivory, 0, .99, .33, g, [1.18, .39, 1.12]);
+  art.ball(.265, ivory, 0, .59, .13, g, [1, 1.85, .55]);
   // Small side-set embroidered eyes and a single white stitch in each eye.
   for (const side of [-1, 1]) {
-    art.ball(.049, "#25232b", side * .374, 1.30, .25, g, [.33, 1, 1], "fabric");
-    art.ball(.012, "#fff9ed", side * .388, 1.309, .265, g, [.3, .85, .8], "smooth");
+    art.ball(.049, "#25232b", side * .43, 1.30, .25, g, [.33, 1, 1], "fabric");
+    art.ball(.012, "#fff9ed", side * .447, 1.309, .265, g, [.3, .85, .8], "smooth");
   }
   const arms = [-1, 1].map(side =>
     art.ball(.105, pink, side * .265, .66, .14, g, [.55, 1.45, .9]),
   );
-  const feet = [-1, 1].map(side =>
-    art.ball(.205, pink, side * .205, .12, .18, g, [.8, .69, 1.5]),
-  );
+  const feet = [-1, 1].map(side => {
+    const foot = art.ball(.205, pink, side * .29, .12, .18, g, [.95, .69, 1.5]);
+    foot.rotation.y = side * .32;
+    foot.userData.restY = .12;
+    foot.userData.restZ = .18;
+    return foot;
+  });
   const tail = art.ball(.19, pink, 0, .37, -.40, g, [.72, .78, 1.65]);
   tail.rotation.x = .55;
   // The soft scallops are thin felt plates along the centre of the back.

@@ -29,6 +29,7 @@ export function findIslandPath(from, to, links) {
   }
   throw new Error(`No walking path between ${from} and ${to}`);
 }
+export const RESIDENT_SPACING = 1.18;
 export const PARK = {
   id: "park",
   x: 0,
@@ -130,12 +131,16 @@ export function createResidentLife({
   function goal(actor) {
     if (mode === "wander") {
       const n = randomIsland(actor.node);
-      return { node: n.id, point: { x: n.x, z: n.z + 1.6 }, state: "waiting" };
+      const angle = actor.slot * Math.PI * 2 / count;
+      return { node: n.id, point: {
+        x: n.x + Math.sin(angle) * 1.35,
+        z: n.z + 1.6 + Math.cos(angle) * 1.35,
+      }, state: "waiting" };
     }
     if (mode === "swing") {
       const point = actor.slot < 2 ? PARK.seats[actor.slot] : {
-        x: PARK.pusher.x + (actor.slot - 2 - (count - 3) / 2) * 1.5,
-        z: PARK.pusher.z + .3,
+        x: PARK.pusher.x - 3.9 + (actor.slot - 2 - (count - 3) / 2) * 1.25,
+        z: PARK.pusher.z - .6,
       };
       return {
         node: "park",
@@ -174,10 +179,8 @@ export function createResidentLife({
   }
   for (const actor of actors) {
     if (mode === "wander") {
-      const n =
-        nodes[
-          (actor.slot + Math.floor(random() * nodes.length)) % nodes.length
-        ];
+      // Unique starting islands prevent dolls from spawning inside one another.
+      const n = nodes[actor.slot % nodes.length];
       actor.node = n.id;
       actor.x = n.x;
       actor.z = n.z + 1.6;
@@ -191,36 +194,73 @@ export function createResidentLife({
       actor.target = target;
     }
   }
-  function update(dt) {
+  const bridges = links.map(([aId, bId]) => {
+    const a = nodes.find(node => node.id === aId), b = nodes.find(node => node.id === bId);
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    const dx = (b.x - a.x) / length, dz = (b.z - a.z) / length;
+    return { x: a.x + dx * 5.64, z: a.z + dz * 5.64, dx, dz,
+      length: Math.max(.01, length - 11.28), owner: null };
+  });
+  function inBridge(point, bridge, margin = 0, width = .36) {
+    const x = point.x - bridge.x, z = point.z - bridge.z;
+    const along = x * bridge.dx + z * bridge.dz;
+    return along >= -margin && along <= bridge.length + margin &&
+      Math.abs(x * bridge.dz - z * bridge.dx) <= width;
+  }
+  function onGround(point) {
+    return nodes.some(node => Math.hypot(point.x - node.x, point.z - node.z) <= 6) ||
+      bridges.some(bridge => inBridge(point, bridge));
+  }
+  function safeStep(actor, destination) {
+    if (!onGround(destination)) return false;
+    if (actors.some(other => other !== actor &&
+      Math.hypot(destination.x - other.x, destination.z - other.z) < RESIDENT_SPACING - 1e-8))
+      return false;
+    return bridges.every(bridge => !inBridge(destination, bridge, 1.25, .75) ||
+      bridge.owner === null || bridge.owner === actor.id);
+  }
+  function moveWalker(actor, next, distance) {
+    const dx = next.x - actor.x, dz = next.z - actor.z, remaining = Math.hypot(dx, dz);
+    if (remaining < 1e-6) return true;
+    const step = Math.min(distance, remaining), heading = Math.atan2(dx, dz);
+    // Right-first sidesteps are reciprocal: approaching dolls choose opposite sides.
+    for (const turn of [0, .5, -.5, 1, -1, Math.PI / 2, -Math.PI / 2, 2.2, -2.2, Math.PI]) {
+      const candidate = turn === 0 && remaining <= distance ? {x: next.x, z: next.z} : {
+        x: actor.x + Math.sin(heading + turn) * step,
+        z: actor.z + Math.cos(heading + turn) * step,
+      };
+      if (!safeStep(actor, candidate)) continue;
+      actor.x = candidate.x; actor.z = candidate.z;
+      actor.heading = heading + turn;
+      actor.walkTime += distance / .95;
+      actor.yielding = turn !== 0;
+      for (const bridge of bridges) if (inBridge(actor, bridge, 1.25, .75)) bridge.owner = actor.id;
+      return turn === 0 && remaining <= distance;
+    }
+    actor.yielding = true;
+    return false;
+  }
+  function step(dt) {
+
     elapsed += dt;
     if (elapsed >= nextChange) {
       mode = chooseActivity(mode, random);
       nextChange = elapsed + 55 + random() * 15;
     }
-    for (const actor of actors) {
+    for (const bridge of bridges) {
+      const owner = actors.find(actor => actor.id === bridge.owner);
+      if (!owner || !inBridge(owner, bridge, 1.4, .85)) bridge.owner = null;
+    }
+    for (const actor of [...actors].sort((a, b) => Number(a.state === "walking") - Number(b.state === "walking"))) {
+      const before = {x: actor.x, z: actor.z, yOffset: actor.yOffset,
+        heading: actor.heading, swingAngle: actor.swingAngle,
+        swingTime: actor.swingTime, playTime: actor.playTime};
       actor.yOffset = 0;
       actor.swingAngle = 0;
       if (actor.state !== "walking" && actor.goalMode !== mode) begin(actor);
       if (actor.state === "walking") {
-        let distance = dt * 0.95;
-        actor.walkTime += dt;
-        while (distance > 0 && actor.routeIndex < actor.route.length) {
-          const next = actor.route[actor.routeIndex],
-            dx = next.x - actor.x,
-            dz = next.z - actor.z,
-            d = Math.hypot(dx, dz);
-          actor.heading = Math.atan2(dx, dz);
-          if (d <= distance) {
-            actor.x = next.x;
-            actor.z = next.z;
-            distance -= d;
-            actor.routeIndex++;
-          } else {
-            actor.x += (dx / d) * distance;
-            actor.z += (dz / d) * distance;
-            distance = 0;
-          }
-        }
+        const next = actor.route[actor.routeIndex];
+        if (next && moveWalker(actor, next, dt * .95)) actor.routeIndex++;
         actor.yOffset = Math.abs(Math.sin(actor.walkTime * 8)) * 0.04;
         if (actor.routeIndex >= actor.route.length) {
           actor.node = actor.target.node;
@@ -243,7 +283,7 @@ export function createResidentLife({
         actor.yOffset = 2.8 - Math.cos(actor.swingAngle) * 1.75 - 0.1;
         actor.heading = 0;
       } else if (actor.state === "pushing") {
-        actor.heading = Math.PI;
+        actor.heading = Math.atan2(park.x + 2.2 - actor.x, park.z + 3.8 - actor.z);
         actor.yOffset = Math.max(0, Math.sin(elapsed * 1.7)) * 0.04;
       } else if (actor.state === "playing") {
         actor.playTime += dt;
@@ -254,6 +294,21 @@ export function createResidentLife({
         actor.yOffset =
           Math.abs(Math.sin(actor.playTime * 5 + actor.slot)) * 0.17;
       }
+      // A moving swing or playmate also yields to a walker crossing nearby.
+      // Roll back its activity clock too, keeping the swing rig in sync.
+      if (actor.state !== "walking" && actors.some(other => other !== actor &&
+        Math.hypot(actor.x - other.x, actor.z - other.z) < RESIDENT_SPACING - 1e-8))
+        Object.assign(actor, before);
+    }
+  }
+  function update(dt) {
+    // Small steps prevent a delayed frame from tunnelling through another doll.
+    let remaining = Math.max(0, dt);
+    if (remaining === 0) step(0);
+    while (remaining > 1e-9) {
+      const slice = Math.min(.025, remaining);
+      step(slice);
+      remaining -= slice;
     }
   }
   function descriptions() {

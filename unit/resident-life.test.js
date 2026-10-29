@@ -86,6 +86,8 @@ test("two residents ride the swings together while four friends join them", () =
     random: () => 0.1,
   });
   assert.equal(life.mode, "swing");
+  life.update(0);
+  assert.ok(life.actors.filter(actor => actor.state === "swinging").every(actor => actor.yOffset > 0));
   life.update(0.5);
   const riders = life.actors.filter((a) => a.state === "swinging");
   assert.equal(riders.length, 2);
@@ -119,4 +121,56 @@ test("playing residents move together on the park lawn instead of staying fixed"
       ) < 0.001,
     );
   }
+});
+
+test("head-on walkers pass without overlapping or teleporting", () => {
+  const life = createResidentLife({nodes,links,random:()=>.1,count:2});
+  for (const [i,actor] of life.actors.entries()) {
+    actor.x = i ? 2 : -2; actor.z = 2;
+    actor.state = "walking"; actor.goalMode = "wander";
+    actor.route = [{x:actor.x,z:2},{x:-actor.x,z:2}]; actor.routeIndex=1;
+    actor.target = {node:"home",point:actor.route[1],state:"waiting"};
+  }
+  for (let i=0;i<150;i++) {
+    const before=life.actors.map(actor=>({x:actor.x,z:actor.z}));
+    life.update(.05);
+    const [a,b]=life.actors;
+    assert.ok(Math.hypot(a.x-b.x,a.z-b.z)>=1.18-1e-6);
+    life.actors.forEach((actor,index)=>assert.ok(Math.hypot(actor.x-before[index].x,actor.z-before[index].z)<=.0476));
+  }
+  assert.ok(life.actors[0].x>1 && life.actors[1].x< -1,"both dolls must pass and continue");
+});
+
+test("walking dolls stay separated through crowded activity transitions", () => {
+  for (let seed=1;seed<=20;seed++) {
+    let state=seed;
+    const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
+    const life=createResidentLife({nodes,links,random});
+    for (let frame=0;frame<6000;frame++) {
+      life.update(.05);
+      for(let i=0;i<life.actors.length;i++) for(let j=i+1;j<life.actors.length;j++) {
+        const a=life.actors[i],b=life.actors[j];
+        if(a.state!=="walking" && b.state!=="walking") continue;
+        assert.ok(Math.hypot(a.x-b.x,a.z-b.z)>=1.18-1e-5,`seed ${seed}, frame ${frame}: ${a.id}/${b.id} overlap`);
+      }
+    }
+  }
+});
+
+test("opposite walkers take turns on a narrow bridge and both finish crossing", () => {
+  const life=createResidentLife({nodes,links,random:()=>.1,count:2});
+  const [a,b]=life.actors;
+  for(const [actor,start,end,node] of [[a,-3,-10.8,"todo"],[b,-10.8,-3,"home"]]) {
+    actor.x=start;actor.z=0;actor.state="walking";actor.goalMode="wander";
+    actor.route=[{x:start,z:0},{x:end,z:0}];actor.routeIndex=1;
+    actor.target={node,point:{x:end,z:0},state:"waiting"};
+  }
+  let first=false,second=false;
+  for(let i=0;i<1200;i++) {
+    life.update(.025);
+    assert.ok(Math.hypot(a.x-b.x,a.z-b.z)>=1.18-1e-6);
+    if(a.node==="todo")first=true;
+    if(b.node==="home")second=true;
+  }
+  assert.ok(first&&second,"neither walker should get stuck at a bridge entrance");
 });
