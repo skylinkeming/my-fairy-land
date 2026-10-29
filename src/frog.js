@@ -7,11 +7,12 @@ export function createFrog(art) {
   g.scale.setScalar(.85);
   const mint = "#9fb9ae";
   // Match the head's width with a rounder, deeper plush belly.
-  art.ball(.37, mint, 0, .49, 0, g, [1.4, 1.3, 1.02]);
+  const frogBody = art.ball(.37, mint, 0, .49, 0, g, [1.4, 1.3, 1.02]);
   art.ball(.47, mint, 0, 1.1, .015, g, [1.1, .85, .65]);
   for (const side of [-1, 1]) {
     art.ball(.16, mint, side * .335, 1.46, .005, g, [1.13, 1, .85]);
-    art.ball(.019, "#252b29", side * .335, 1.5, .143, g, [1, .85, .4], "fabric");
+    const eye = art.ball(.019, "#252b29", side * .335, 1.5, .143, g, [1, .85, .4], "fabric");
+    eye.userData.shapeEye = true;
     art.ball(.113, "#c7b58b", side * .34, 1.13, .232, g, [1, 1.05, .2], "fabric");
     art.ball(.101, "#e2d2c1", side * .34, 1.13, .25, g, [1, 1.05, .18], "fabric");
   }
@@ -30,5 +31,10 @@ export function createFrog(art) {
     new T.Vector3(.09, 1.365, .237),
   );
   g.add(new T.Mesh(new T.TubeGeometry(smile, 20, .007, 8, false), mouthMaterial));
+  g.userData.shapeHeadPivot = [0, 1.1, 0.015];
+  for (const part of g.children) {
+    part.userData.shapePart = arms.includes(part) ? 'arms' : feet.includes(part) ? 'feet' :
+      part === frogBody ? 'body' : part.position.y > 0 && part.position.y < .8 ? 'body' : 'head';
+  }
   return {g, arms, feet, dispose() { mouthMaterial.dispose(); }};
 }

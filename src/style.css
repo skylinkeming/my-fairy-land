@@ -3431,3 +3431,58 @@ button.resident-art:disabled .resident-view-hint { visibility: hidden; }
   cursor: pointer;
 }
 .resident-dialog button:focus-visible { outline: 3px solid #a87643; outline-offset: 3px; }
+
+.resident-edit-button { margin-bottom: 8px; }
+.resident-dialog > button + button { margin-left: 8px; }
+body.resident-editor-open { overflow: hidden; }
+.resident-editor {
+  position: fixed; inset: 0; z-index: 1000;
+  padding: 24px; background: #352f27aa; backdrop-filter: blur(8px);
+  display: grid; place-items: center;
+}
+.resident-editor[hidden] { display: none; }
+.resident-editor-shell {
+  width: min(1080px, 100%); max-height: calc(100dvh - 48px); overflow: hidden;
+  border: 1px solid #d5c29b; border-radius: 24px; background: #fff9ec; color: #65513b;
+  box-shadow: 0 24px 100px #1d160740;
+}
+.resident-editor header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 24px; border-bottom: 1px solid #e4d6bd; }
+.resident-editor header span { color: #9f8257; font-size: 10px; letter-spacing: .2em; }
+.resident-editor h2 { margin: 4px 0 0; font-size: 22px; }
+.resident-editor button, .resident-editor select {
+  font: inherit; border: 1px solid #d0b992; border-radius: 10px; padding: 9px 12px;
+  color: #65513b; background: #fffaf0; cursor: pointer;
+}
+.resident-editor button:hover { background: #eee0c3; }
+.resident-editor button:focus-visible, .resident-editor input:focus-visible, .resident-editor select:focus-visible { outline: 3px solid #a87643; outline-offset: 3px; }
+.resident-editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+.resident-editor-stage { position: relative; min-height: 520px; height: min(650px, calc(100dvh - 150px)); background: #eee6d6; }
+.resident-editor-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.resident-editor-views { position: absolute; bottom: 50px; left: 0; right: 0; display: flex; gap: 8px; justify-content: center; }
+.resident-editor-stage > p { position: absolute; bottom: 16px; width: 100%; margin: 0; font-size: 12px; text-align: center; pointer-events: none; color: #8d785d; }
+.resident-editor-tools { padding: 20px; overflow-y: auto; max-height: min(650px, calc(100dvh - 150px)); }
+.resident-editor-picker { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }
+.resident-editor-picker select { width: 100%; }
+.resident-editor-sliders { margin: 20px 0; }
+.resident-editor-slider { display: grid; grid-template-columns: 1fr 48px; gap: 7px 10px; margin: 14px 0; font-size: 12px; }
+.resident-editor-slider[hidden] { display: none; }
+.resident-editor-slider > span { grid-column: 1 / -1; }
+.resident-editor-slider input { width: 100%; accent-color: #96794d; cursor: pointer; }
+.resident-editor-slider output { text-align: right; font-variant-numeric: tabular-nums; }
+.resident-editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.resident-editor-actions [data-save] { grid-column: 1 / -1; background: #7a8767; color: #fffaf0; border-color: #7a8767; }
+.resident-editor-note, [data-editor-status] { font-size: 12px; line-height: 1.7; margin: 14px 0 0; }
+.resident-editor-note { color: #968265; }
+[data-editor-status] { color: #6b7959; min-height: 3.4em; }
+@media (max-width: 760px) {
+  .resident-editor { padding: 8px; }
+  .resident-editor-shell { max-height: calc(100dvh - 16px); border-radius: 16px; overflow-y: auto; }
+  .resident-editor header { padding: 14px 16px; }
+  .resident-editor h2 { font-size: 19px; }
+  .resident-editor-layout { grid-template-columns: 1fr; }
+  .resident-editor-stage { height: 40dvh; min-height: 250px; position: sticky; top: 0; z-index: 1; }
+  .resident-editor-tools { max-height: none; overflow: visible; padding: 18px; }
+  .resident-editor-views { bottom: 38px; }
+  .resident-editor-views button { font-size: 12px; padding: 6px 12px; }
+  .resident-editor-stage > p { bottom: 12px; font-size: 10px; }
+}

@@ -518,16 +518,22 @@ function plushSVG(r) {
 function renderFriends() {
   const activities = world?.getResidentActivities?.() || [];
   document.querySelector("#panel-content").innerHTML =
-    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>${state.residents.length} 位小夥伴各有自己的日常：兩兩散步、坐在公園椅子上聊天、獨自在樹林發呆，也會盪鞦韆和玩球。點選娃娃，立刻拉近看看牠；也可以打個招呼。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card" data-resident="${i}"><button class="resident-art resident-${i}" data-watch-resident="${i}" aria-label="放大查看${esc(r.name)}" ${world ? "" : "disabled"}>${plushSVG(r)}<span class="resident-view-hint">放大看看 ↗</span></button><span class="resident-status"><i></i> ${esc(activities[i]?.label || "在島上休息")}</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
+    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>${state.residents.length} 位小夥伴各有自己的日常：兩兩散步、坐在公園椅子上聊天、獨自在樹林發呆，也會盪鞦韆和玩球。點選娃娃，立刻拉近看看牠；也可以打個招呼。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card" data-resident="${i}"><button class="resident-art resident-${i}" data-watch-resident="${i}" aria-label="放大查看${esc(r.name)}" ${world ? "" : "disabled"}>${plushSVG(r)}<span class="resident-view-hint">放大看看 ↗</span></button><span class="resident-status"><i></i> ${esc(activities[i]?.label || "在島上休息")}</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button resident-edit-button" data-edit-resident="${i}" ${world ? "" : "disabled"}>調整造型</button><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
   document.querySelectorAll("[data-resident]").forEach((card) => {
     card.onclick = (event) => {
-      if (!world || event.target.closest("[data-greet]")) return;
+      if (!world || event.target.closest("[data-greet], [data-edit-resident]")) return;
       const index = Number(card.dataset.resident);
       closePanel();
       setMapExpanded(true);
       world.focusResident(index);
       toast(`正在看著 ${state.residents[index].name} ♡ 拖曳可從不同角度看看牠`);
       document.querySelector("#reset").focus();
+    };
+  });
+  document.querySelectorAll("[data-edit-resident]").forEach(button => {
+    button.onclick = () => {
+      closePanel();
+      world?.editResident(Number(button.dataset.editResident));
     };
   });
   document.querySelectorAll("[data-greet]").forEach(

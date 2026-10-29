@@ -70,8 +70,10 @@ export function createDinosaur(art) {
   art.ball(.29, ivory, 0, .57, .20, g, [1, 1.48, .55]);
   // Small side-set embroidered eyes and a single white stitch in each eye.
   for (const side of [-1, 1]) {
-    art.ball(.064, "#201e24", side * .482, 1.36, .32, g, [.30, 1, 1], "fabric");
-    art.ball(.015, "#fff9ed", side * .499, 1.369, .339, g, [.3, .85, .8], "smooth");
+    const eye = art.ball(.064, "#201e24", side * .482, 1.36, .32, g, [.30, 1, 1], "fabric");
+    eye.userData.shapeEye = true;
+    const glint = art.ball(.015, "#fff9ed", side * .499, 1.369, .339, g, [.3, .85, .8], "smooth");
+    glint.userData.shapeEye = true;
   }
   const arms = [-1, 1].map(side =>
     art.ball(.115, pink, side * .33, .61, .23, g, [.55, 1.52, .85]),
@@ -97,6 +99,11 @@ export function createDinosaur(art) {
       new T.Vector3(side * .34, 1.04, .65),
     );
     g.add(new T.Mesh(new T.TubeGeometry(curve, 12, .005, 6, false), stitch));
+  }
+  g.userData.shapeHeadPivot = [0, 1.28, 0.23];
+  for (const part of g.children) {
+    part.userData.shapePart = arms.includes(part) ? 'arms' : feet.includes(part) ? 'feet' :
+      part === torso ? 'body' : part === tail ? 'tail' : part.position.y < .8 && part.geometry.type !== 'TubeGeometry' ? 'body' : 'head';
   }
   return {g, arms, feet, dispose() { torsoGeometry.dispose(); headGeometry.dispose(); stitch.dispose(); }};
 }

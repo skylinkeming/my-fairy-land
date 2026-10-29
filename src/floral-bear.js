@@ -74,7 +74,10 @@ export function createFloralBear(art) {
     return arm;
   });
   const feet=[-1,1].map(side=>art.ball(.19,"#b7b5a9",side*.235,.13,0,g,[1,1.25,.95]));
-  for(const side of [-1,1]) art.ball(.039,"#252729",side*.165,1.29,.219,g,[1,1,.22],"fabric");
+  for(const side of [-1,1]) {
+    const eye = art.ball(.039,"#252729",side*.165,1.29,.219,g,[1,1,.22],"fabric");
+    eye.userData.shapeEye = true;
+  }
   const noseShape=new T.Shape();noseShape.moveTo(-.05,0);noseShape.quadraticCurveTo(0,.012,.05,0);noseShape.quadraticCurveTo(.035,-.04,0,-.065);noseShape.quadraticCurveTo(-.035,-.04,-.05,0);
   const nose=new T.Mesh(new T.ShapeGeometry(noseShape),new T.MeshStandardMaterial({color:"#252729",roughness:1,side:T.DoubleSide}));
   nose.position.set(0,1.19,.227);g.add(nose);
@@ -82,6 +85,11 @@ export function createFloralBear(art) {
   for(const points of [ [[0,1.13,.228],[0,1.045,.229]], [[0,1.045,.229],[-.075,.98,.228]], [[0,1.045,.229],[.075,.98,.228]] ]) {
     const curve=new T.LineCurve3(...points.map(point=>new T.Vector3(...point)));
     g.add(new T.Mesh(new T.TubeGeometry(curve,1,.008,8,false),mouthMaterial));
+  }
+  g.userData.shapeHeadPivot = [0, 1.15, 0];
+  for (const part of g.children) {
+    part.userData.shapePart = arms.includes(part) ? 'arms' : feet.includes(part) ? 'feet' :
+      part === body ? 'pillow' : 'head';
   }
   return {g,arms,feet,dispose(){texture.dispose();material.dispose();geometry.dispose();mouthMaterial.dispose();nose.material.dispose();}};
 }

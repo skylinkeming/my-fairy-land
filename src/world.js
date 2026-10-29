@@ -13,6 +13,8 @@ import {
 import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RESIDENT_GREETINGS } from "./residents.js";
+import { createResidentEditor } from "./resident-editor.js";
+import { applyResidentShape, disposeShapeGeometry } from "./resident-shape.js";
 export function createWorld(
   container,
   onSelect,
@@ -808,6 +810,11 @@ export function createWorld(
     stopFollowing();
   }
   residentDialog.querySelector("button").onclick = finishResidentVisit;
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.textContent = "調整造型";
+  editButton.onclick = () => openResidentEditor(interactingResident ?? 0);
+  residentDialog.append(editButton);
   function visitResident(index) {
     const resident = residents[index];
     if (!resident) return;
@@ -909,6 +916,12 @@ export function createWorld(
       ball(0.135, color, 0.18, 0.1, 0.08, g, [1, 0.7, 1.4]),
     ];
     g.position.set(x, top, z);
+    g.userData.shapeHeadPivot = [0, 1.02, .025];
+    for (const part of g.children) {
+      part.userData.shapePart = arms.includes(part) ? 'arms' : feet.includes(part) ? 'feet' :
+        part.position.y >= .85 || part.geometry.type === 'TubeGeometry' ? 'head' : 'body';
+      if (part.position.y > 1.06 && part.position.y < 1.09 && part.position.z > .39) part.userData.shapeEye = true;
+    }
     residents.push({ g, feet, arms });
   }
   plush("bear", "#bb956e", "#90a080", scene, 0, 0, 0);
@@ -923,6 +936,13 @@ export function createWorld(
   const dinosaur = createDinosaur(plushArt);
   scene.add(dinosaur.g);
   residents.push(dinosaur);
+  const shapeEditor = createResidentEditor({residents, residentInfo,
+    onApply(index, shape) { applyResidentShape(residents[index].g, shape); },
+  });
+  function openResidentEditor(index = 0) {
+    finishResidentVisit();
+    shapeEditor.open(index);
+  }
   const clouds = [];
   for (const [x, y, z, s] of [
     [-9, 5, -7, 1],
@@ -1043,7 +1063,7 @@ export function createWorld(
   function animate() {
     animationFrame = requestAnimationFrame(animate);
     // Do not spend GPU time on scenery hidden behind journals or background tabs.
-    if (document.hidden || document.body.classList.contains("modal-open"))
+    if (document.hidden || document.body.classList.contains("modal-open") || document.body.classList.contains("resident-editor-open"))
       return;
     const t = clock.getElapsedTime();
     if (focusedResident !== null) {
@@ -1232,6 +1252,8 @@ export function createWorld(
     dispose() {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+      shapeEditor.dispose();
+      residents.forEach(resident => disposeShapeGeometry(resident.g));
       residentDialog.remove();
       controls.dispose();
       scene.traverse((object) => {
@@ -1267,6 +1289,7 @@ export function createWorld(
       return life.descriptions();
     },
     focusResident: visitResident,
+    editResident: openResidentEditor,
     endResidentVisit: finishResidentVisit,
     watchResidents() {
       finishResidentVisit();
