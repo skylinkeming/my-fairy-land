@@ -3384,3 +3384,20 @@ footer {
   }
   .map-controls > button { flex-shrink: 0; }
 }
+
+button.resident-art {
+  display: block;
+  width: calc(100% + 26px);
+  border: 0;
+  border-radius: 0;
+  color: #705b3f;
+  cursor: pointer;
+}
+.resident-view-hint { display: block; font-size: 10px; padding: 2px 0 10px; }
+button.resident-art:focus-visible { outline: 3px solid #a87643; outline-offset: -4px; }
+button.resident-art:disabled { cursor: default; }
+button.resident-art:disabled .resident-view-hint { visibility: hidden; }
+@media (max-width: 760px) {
+  button.resident-art { width: 100%; margin: 0; }
+  .resident-view-hint { font-size: 8px; padding-bottom: 0; }
+}

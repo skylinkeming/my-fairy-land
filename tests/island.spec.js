@@ -634,3 +634,31 @@ test("photo bear joins an existing household without resetting family data", asy
   await page.locator('.island-card[data-open="friends"]').click();
   await expect(page.locator(".resident-card")).toHaveCount(4);
 });
+
+test("each resident portrait immediately opens its own close-up and manual movement releases tracking", async ({page}) => {
+  test.setTimeout(90000);
+  const names=["奶茶小熊","棉花小兔","抹茶小熊","熊熊"];
+  for (const [index,name] of names.entries()) {
+    await page.locator('.island-card[data-open="friends"]').click();
+    const portrait=page.getByRole("button",{name:`放大查看${name}`,exact:true});
+    await portrait.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#modal")).toBeHidden();
+    await expect(page.locator(".map-expanded")).toBeVisible();
+    await expect(page.locator("#world")).toHaveAttribute("data-focused-resident",String(index));
+    await expect(page.locator("#toast")).toContainText(name);
+    if (index===3) {
+      await page.waitForTimeout(1500);
+      await page.screenshot({path:"/tmp/bear-focused-final.png"});
+    }
+    await page.keyboard.press("Escape");
+  }
+  await page.locator("#map-expand").click();
+  const r=await page.locator("#world-canvas").boundingBox();
+  await page.mouse.move(r.x+r.width*.5,r.y+r.height*.65);
+  await page.mouse.down();
+  await page.mouse.move(r.x+r.width*.58,r.y+r.height*.65,{steps:4});
+  await page.mouse.up();
+  await expect(page.locator("#world")).not.toHaveAttribute("data-focused-resident");
+  await page.locator("#reset").click();
+});

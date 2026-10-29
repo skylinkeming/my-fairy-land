@@ -9,12 +9,7 @@ export function createFloralBear(art) {
   canvas.width = 1024; canvas.height = 512;
   const c = canvas.getContext("2d");
   c.fillStyle = "#b7b5a9"; c.fillRect(0, 0, 1024, 512);
-  // Faded ivory patches and irregular blue / terracotta botanical prints.
-  c.fillStyle = "#d2cdb9"; c.globalAlpha = .55;
-  for (const [x, y, w, h] of [[760,210,48,75],[735,325,36,85],[245,270,36,80],[190,410,42,45]]) {
-    c.beginPath(); c.ellipse(x,y,w,h,-.35,0,Math.PI*2); c.fill();
-  }
-  c.globalAlpha = 1;
+  // Keep the gray fabric uniform beneath the blue / terracotta prints.
   for (const [x,y,color,angle,size] of [
     [680,90,"#ba816b",-.5,30],[850,185,"#647e90",.65,37],
     [610,255,"#667e8c",-.55,42],[880,310,"#bd826a",.35,28],

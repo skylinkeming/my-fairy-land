@@ -42,6 +42,12 @@ export function createWorld(
   controls.rotateSpeed = 0.55;
   controls.update();
   controls.saveState();
+  let focusedResident = null;
+  function stopFollowing() {
+    focusedResident = null;
+    delete container.dataset.focusedResident;
+  }
+  controls.addEventListener("start", stopFollowing);
   scene.add(new T.AmbientLight(0xfff2d6, 1.55));
   const sun = new T.DirectionalLight(0xfff0d2, 2.5);
   sun.position.set(-25, 55, 32);
@@ -978,6 +984,12 @@ export function createWorld(
     if (document.hidden || document.body.classList.contains("modal-open"))
       return;
     const t = clock.getElapsedTime();
+    if (focusedResident !== null) {
+      const resident = residents[focusedResident];
+      const target = resident.g.position.clone().add(new T.Vector3(0, .85, 0));
+      camera.position.add(target.clone().sub(controls.target));
+      controls.target.copy(target);
+    }
     controls.update();
     const dt = Math.min(0.05, Math.max(0, t - lastFrameTime));
     lastFrameTime = t;
@@ -1165,6 +1177,7 @@ export function createWorld(
       canvas.style.cursor = enabled ? "grab" : "";
     },
     reset() {
+      stopFollowing();
       controls.reset();
       camera.zoom = defaultZoom;
       camera.updateProjectionMatrix();
@@ -1176,7 +1189,27 @@ export function createWorld(
     getResidentActivities() {
       return life.descriptions();
     },
+    focusResident(index) {
+      const resident = residents[index];
+      if (!resident) return;
+      // Remove residual orbit momentum so selecting a doll is immediate.
+      controls.enableDamping = false;
+      controls.update();
+      const target = resident.g.position.clone().add(new T.Vector3(0, .85, 0));
+      const heading = resident.g.rotation.y + .65;
+      controls.target.copy(target);
+      camera.position.copy(target).add(new T.Vector3(
+        Math.sin(heading) * 35, 32, Math.cos(heading) * 35,
+      ));
+      camera.zoom = 8;
+      camera.updateProjectionMatrix();
+      controls.update();
+      controls.enableDamping = true;
+      focusedResident = index;
+      container.dataset.focusedResident = String(index);
+    },
     watchResidents() {
+      stopFollowing();
       const actor = life.actors[0];
       const target =
         life.mode === "wander" ? actor : { x: PARK.x, z: PARK.z + 1.5 };
@@ -1188,6 +1221,7 @@ export function createWorld(
       camera.updateProjectionMatrix();
     },
     tour() {
+      stopFollowing();
       camera.zoom = Math.max(defaultZoom, 1.2);
       camera.updateProjectionMatrix();
     },
