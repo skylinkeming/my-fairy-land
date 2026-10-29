@@ -1,4 +1,5 @@
 import * as T from "three";
+import { createPlushArt } from "./plush-art.js";
 import {
   BOARD_THEMES,
   styleTerrain,
@@ -801,12 +802,17 @@ export function createWorld(
     }
   }
   const residents = [];
+  const plushArt = createPlushArt();
   function plush(type, color, shirt, p, x, z, phase) {
     const g = new T.Group();
+    const ball = (r, c, x, y, z, parent, scale) => plushArt.ball(
+      r, c, x, y, z, parent, scale,
+      c === color || c === "#f3e6cb" ? "fur" : c === shirt ? "fabric" : "smooth",
+    );
     p.add(g);
     g.scale.setScalar(0.85);
     ball(0.32, color, 0, 0.43, 0, g, [1, 1.2, 0.8]);
-    ball(0.41, color, 0, 1.02, 0.025, g, [1, 0.9, 0.9]);
+    ball(0.445, color, 0, 1.02, 0.025, g, [1, 0.9, 0.9]);
     const arms = [];
     for (const s of [-1, 1]) {
       if (type === "rabbit") {
@@ -817,12 +823,22 @@ export function createWorld(
         ball(0.145, color, s * 0.31, 1.28, 0, g);
         ball(0.08, "#d3b99d", s * 0.31, 1.28, 0.09, g);
       }
-      ball(0.028, "#514a3c", s * 0.145, 1.06, 0.36, g);
-      ball(0.065, "#d9a398", s * 0.27, 0.96, 0.32, g, [1, 0.5, 0.25]);
+      plushArt.ball(0.035, "#382d27", s * 0.145, 1.07, 0.398, g, [1, 1.1, .55], "eye");
+      plushArt.ball(0.009, "#fff8e9", s * 0.145 - .009, 1.082, .414, g, [1, 1, .5], "eye");
+      ball(0.065, "#d9a398", s * 0.27, 0.96, 0.35, g, [1, 0.5, 0.25]);
       arms.push(ball(0.12, color, s * 0.34, 0.52, 0, g, [0.8, 1.5, 0.8]));
     }
-    ball(0.2, "#f3e6cb", 0, 0.93, 0.3, g, [1, 0.7, 0.35]);
-    ball(0.04, "#67533f", 0, 0.98, 0.38, g, [1, 0.7, 0.7]);
+    ball(0.2, "#f3e6cb", 0, 0.93, 0.355, g, [1, 0.7, 0.35]);
+    ball(0.04, "#67533f", 0, 0.98, 0.435, g, [1, 0.7, 0.7]);
+    for (const side of [-1, 1]) {
+      const curve = new T.QuadraticBezierCurve3(
+        new T.Vector3(0, .952, .436),
+        new T.Vector3(side * .025, .91, .435),
+        new T.Vector3(side * .052, .938, .424),
+      );
+      const smile = new T.Mesh(new T.TubeGeometry(curve, 12, .007, 6, false), mat("#67533f"));
+      g.add(smile);
+    }
     ball(0.28, shirt, 0, 0.5, 0.015, g, [1, 1, 0.88]);
     ball(0.04, "#e8cf85", 0, 0.56, 0.25, g);
     const feet = [
@@ -1131,6 +1147,7 @@ export function createWorld(
         object.geometry?.dispose();
       });
       for (const material of mats.values()) material.dispose();
+      plushArt.dispose();
       renderer.dispose();
     },
     zoom(f) {
