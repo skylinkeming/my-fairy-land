@@ -526,7 +526,7 @@ function renderFriends() {
       closePanel();
       setMapExpanded(true);
       world.focusResident(index);
-      toast(`正在看著 ${state.residents[index].name} ♡ 拖曳地圖可自由探索`);
+      toast(`正在看著 ${state.residents[index].name} ♡ 拖曳可從不同角度看看牠`);
       document.querySelector("#reset").focus();
     };
   });
@@ -682,6 +682,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 function setMapExpanded(expanded) {
+  if (!expanded) world?.endResidentVisit?.();
   document
     .querySelector(".world-wrap")
     .classList.toggle("map-expanded", expanded);
@@ -730,9 +731,14 @@ function useIllustratedMap() {
 async function loadWorld() {
   try {
     const { createWorld } = await import("./world.js");
-    world = createWorld(document.querySelector("#world"), openPanel, icon, () =>
-      openPanel("todo", { upcoming: true }),
-    );
+    world = createWorld(document.querySelector("#world"), openPanel, icon,
+      () => openPanel("todo", { upcoming: true }), {
+        residentInfo: state.residents,
+        onResidentSelect() {
+          closePanel();
+          setMapExpanded(true);
+        },
+      });
     updateTodoReminder();
     document.querySelector("#world-canvas").addEventListener(
       "webglcontextlost",

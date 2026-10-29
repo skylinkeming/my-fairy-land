@@ -3401,3 +3401,33 @@ button.resident-art:disabled .resident-view-hint { visibility: hidden; }
   button.resident-art { width: 100%; margin: 0; }
   .resident-view-hint { font-size: 8px; padding-bottom: 0; }
 }
+
+.resident-dialog {
+  position: absolute;
+  z-index: 12;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(360px, calc(100% - 32px));
+  padding: 16px 20px;
+  border: 1px solid #c7aa7b;
+  border-radius: 18px;
+  background: #fff9ecf5;
+  color: #65513b;
+  box-shadow: 0 8px 28px #49382024;
+  text-align: center;
+}
+.resident-dialog[hidden] { display: none; }
+.resident-dialog strong { font-size: 16px; }
+.resident-dialog p { margin: 8px 0; line-height: 1.6; }
+.resident-dialog small { display: block; color: #8a765b; }
+.resident-dialog button {
+  margin-top: 12px;
+  padding: 8px 18px;
+  border: 1px solid #b99c70;
+  border-radius: 20px;
+  background: #f1e2bf;
+  color: #65513b;
+  cursor: pointer;
+}
+.resident-dialog button:focus-visible { outline: 3px solid #a87643; outline-offset: 3px; }

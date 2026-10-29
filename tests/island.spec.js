@@ -402,6 +402,34 @@ test("mixed resident activities show walking companions, seated chat and forest 
   await expect(page.locator("#modal")).toBeHidden();
 });
 
+test("a selected doll greets you, stays paused during orbiting and resumes on goodbye", async ({ page }) => {
+  test.setTimeout(60000);
+  await page.locator('[data-open="friends"]').first().click();
+  await page.locator('[data-watch-resident="0"]').click();
+  const world = page.locator("#world"), dialog = page.locator(".resident-dialog");
+  await expect(world).toHaveAttribute("data-paused-resident", "0");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("奶茶小熊");
+  await expect(dialog).toContainText("今天也辛苦了");
+  const canvas = page.locator("#world-canvas"), bounds = await canvas.boundingBox();
+  await page.mouse.move(bounds.x + bounds.width * .5, bounds.y + bounds.height * .48);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width * .65, bounds.y + bounds.height * .4, {steps: 8});
+  await page.mouse.up();
+  await expect(world).toHaveAttribute("data-paused-resident", "0");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", {name: "繼續去玩吧"}).click();
+  await expect(world).not.toHaveAttribute("data-paused-resident");
+  await expect(dialog).toBeHidden();
+  // The paused doll was the orbit target, so clicking the canvas centre hits it directly.
+  await canvas.click({position: {x: bounds.width * .5, y: bounds.height * .5}});
+  await expect(dialog).toBeVisible();
+  await expect(world).toHaveAttribute("data-paused-resident", "0");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(world).not.toHaveAttribute("data-paused-resident");
+});
+
 test("calendar completed deletion only removes items in the displayed month", async ({
   page,
 }) => {

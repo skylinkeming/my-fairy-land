@@ -131,6 +131,7 @@ export function createResidentLife({
     swingTime: 2,
     wait: 0,
   }));
+  const paused = new Set();
   let strollEnd = 0, strollPause = 0;
   function assignActivities() {
     const schedule = mode === "wander"
@@ -189,7 +190,7 @@ export function createResidentLife({
   assignActivities();
   function begin(actor) {
     const target = goal(actor);
-    actor.detour = null;
+    actor.departure = null;
     actor.goalMode = mode;
     actor.target = target;
     actor.route = routeBetweenIslands(
@@ -289,13 +290,17 @@ export function createResidentLife({
       const a = actors[i], b = actors[j];
       if (a.partner === b.id && a.activity === b.activity) continue;
       if (a.state !== "walking" && a.state !== "strolling" && b.state !== "walking" && b.state !== "strolling") continue;
-      if ([a, b].some(actor => actor.detour || elapsed < (actor.turnCooldown || 0))) continue;
+      if ([a, b].some(actor => elapsed < (actor.turnCooldown || 0))) continue;
       // Keep bridge traffic on its safe, single-file route.
       if (bridges.some(bridge => inBridge(a, bridge, 1.5, 1) || inBridge(b, bridge, 1.5, 1))) continue;
       const dx = b.x - a.x, dz = b.z - a.z, gap = Math.hypot(dx, dz);
       if (gap > 1.9 || gap < 1e-6) continue;
       const approaching = actor => {
-        const next = actor.state === "strolling" ? strollPoint(actor) : actor.route?.[actor.routeIndex];
+        if (paused.has(actor.id)) return false;
+        const next = actor.departure ? {
+          x: actor.x + Math.sin(actor.departure.heading),
+          z: actor.z + Math.cos(actor.departure.heading),
+        } : actor.state === "strolling" ? strollPoint(actor) : actor.route?.[actor.routeIndex];
         if ((actor.state !== "walking" && actor.state !== "strolling") || !next) return false;
         const other = actor === a ? b : a;
         return (next.x - actor.x) * (other.x - actor.x) +
@@ -303,6 +308,7 @@ export function createResidentLife({
       };
       if (!approaching(a) && !approaching(b)) continue;
       for (const [actor, other] of [[a, b], [b, a]]) {
+        if (paused.has(actor.id)) continue;
         if (actor.state !== "walking" && actor.state !== "strolling") continue;
         const away = Math.atan2(actor.x - other.x, actor.z - other.z);
         const variation = (random() - .5) * 1.1;
@@ -312,8 +318,21 @@ export function createResidentLife({
           const point = {x: actor.x + Math.sin(heading) * 1.4,
             z: actor.z + Math.cos(heading) * 1.4};
           if (!onGround(point) || bridges.some(bridge => inBridge(point, bridge, 1.5, 1))) continue;
-          actor.detour = {point, until: elapsed + 1.8};
-          actor.turnCooldown = elapsed + 5;
+          // This is a new walk, not a temporary sidestep back to the old goal.
+          const walkers = [actor];
+          if (actor.activity === "stroll" && actor.partner !== null) {
+            const companion = actors.find(candidate => candidate.id === actor.partner);
+            if (companion?.activity === "stroll" && !paused.has(companion.id)) walkers.push(companion);
+          }
+          for (const walker of walkers) {
+            walker.departure = {heading};
+            walker.route = [];
+            walker.routeIndex = 0;
+            walker.target = null;
+            walker.state = "walking";
+            walker.goalMode = mode;
+            walker.turnCooldown = elapsed + 5;
+          }
           break;
         }
       }
@@ -322,6 +341,8 @@ export function createResidentLife({
   function step(dt) {
 
     elapsed += dt;
+    // Other dolls carry on; role swaps wait until the visit ends.
+    if (paused.size) nextChange += dt;
     if (elapsed >= nextChange) {
       mode = chooseActivity(mode, random);
       // Rotate companions and roles, rather than keeping the same dolls together.
@@ -338,37 +359,43 @@ export function createResidentLife({
       const owner = actors.find(actor => actor.id === bridge.owner);
       if (!owner || !inBridge(owner, bridge, 1.4, .85)) bridge.owner = null;
     }
-    for (const actor of actors) if (actor.detour && elapsed >= actor.detour.until) actor.detour = null;
     turnApart();
     for (const actor of [...actors].sort((a, b) => Number(a.state === "walking" || a.state === "strolling") - Number(b.state === "walking" || b.state === "strolling"))) {
+      if (paused.has(actor.id)) continue;
       const before = {x: actor.x, z: actor.z, yOffset: actor.yOffset,
         heading: actor.heading, swingAngle: actor.swingAngle,
         swingTime: actor.swingTime, playTime: actor.playTime};
       actor.yOffset = 0;
       actor.swingAngle = 0;
-      if (actor.goalMode !== mode && actor.state !== "walking") begin(actor);
+      if (actor.goalMode !== mode && (actor.state !== "walking" || actor.departure)) begin(actor);
       if (actor.state === "walking") {
-        const next = actor.detour?.point || actor.route[actor.routeIndex];
-        if (next && moveWalker(actor, next, dt * .95)) {
-          if (actor.detour) actor.detour = null;
-          else actor.routeIndex++;
+        if (actor.departure) {
+          const heading = actor.departure.heading;
+          moveWalker(actor, {x: actor.x + Math.sin(heading), z: actor.z + Math.cos(heading)}, dt * .95);
+          // Keep the direction actually taken, including natural turns at shorelines.
+          actor.departure.heading = actor.heading;
+          const island = nodes.find(node => Math.hypot(actor.x - node.x, actor.z - node.z) <= 6);
+          if (island) actor.node = island.id;
+        } else {
+          const next = actor.route[actor.routeIndex];
+          if (next && moveWalker(actor, next, dt * .95)) actor.routeIndex++;
+          if (actor.routeIndex >= actor.route.length) {
+            actor.node = actor.target.node;
+            actor.state = actor.target.state;
+            actor.wait = 1.5 + random() * 3;
+            actor.playTime = 0;
+          }
         }
         actor.yOffset = Math.abs(Math.sin(actor.walkTime * 8)) * 0.04;
-        if (actor.routeIndex >= actor.route.length) {
-          actor.node = actor.target.node;
-          actor.state = actor.target.state;
-          actor.wait = 1.5 + random() * 3;
-          actor.playTime = 0;
-        }
       } else if (actor.state === "strolling") {
-        const next = actor.detour?.point || strollPoint(actor);
+        const next = strollPoint(actor);
         const companion = actors.find(other => other.id === actor.partner);
         const partnerGoal = companion && strollPoint(companion);
-        const waitingForPartner = !actor.detour && companion &&
-          (companion.state !== "strolling" || companion.detour ||
+        const waitingForPartner = companion &&
+          (companion.state !== "strolling" ||
           Math.hypot(actor.x - next.x, actor.z - next.z) + .08 <
           Math.hypot(companion.x - partnerGoal.x, companion.z - partnerGoal.z));
-        if (!waitingForPartner && moveWalker(actor, next, dt * .72) && actor.detour) actor.detour = null;
+        if (!waitingForPartner) moveWalker(actor, next, dt * .72);
         actor.yOffset = Math.abs(Math.sin(actor.walkTime * 8)) * .025;
       } else if (actor.state === "chatting") {
         actor.yOffset = PARK.chatBench.height - .85 * .43;
@@ -410,8 +437,8 @@ export function createResidentLife({
         Object.assign(actor, before);
     }
     const companions = actors.filter(actor => actor.activity === "stroll");
-    if (companions.length === 2 && companions.every(actor => actor.state === "strolling" &&
-      !actor.detour && Math.hypot(actor.x - strollPoint(actor).x, actor.z - strollPoint(actor).z) < .05)) {
+    if (companions.length === 2 && companions.every(actor => !paused.has(actor.id) && actor.state === "strolling" &&
+      Math.hypot(actor.x - strollPoint(actor).x, actor.z - strollPoint(actor).z) < .05)) {
       strollPause += dt;
       if (strollPause >= 1) { strollEnd = 1 - strollEnd; strollPause = 0; }
     } else strollPause = 0;
@@ -429,8 +456,8 @@ export function createResidentLife({
   function descriptions() {
     return actors.map((actor) => ({
       state: actor.state,
-      label: {
-        walking: actor.activity === "stroll" ? "去找朋友一起散步" :
+      label: paused.has(actor.id) ? "停下來和你打招呼" : {
+        walking: actor.activity === "stroll" ? (actor.departure ? "和朋友兩兩散步中" : "去找朋友一起散步") :
           actor.activity === "chat" ? "前往公園椅子聊天" :
           actor.activity === "daydream" ? "去樹林裡放空" : "跨島散步中",
         strolling: "和朋友兩兩散步中",
@@ -445,6 +472,9 @@ export function createResidentLife({
   }
   return {
     actors,
+    pause(index) { if (actors[index]) paused.add(actors[index].id); },
+    resume(index) { if (actors[index]) paused.delete(actors[index].id); },
+    isPaused(index) { return actors[index] ? paused.has(actors[index].id) : false; },
     update,
     descriptions,
     initialMode,

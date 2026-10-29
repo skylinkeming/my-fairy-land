@@ -15,3 +15,12 @@ export const PHOTO_DINO = {
   id: "pink-dinosaur", name: "恐龍", type: "dinosaur", color: "#e78ba8",
   role: "背著紫色小背鰭，陪你探索每座島",
 };
+
+export const RESIDENT_GREETINGS = [
+  "今天也辛苦了！要不要一起坐著發呆？ ☕",
+  "剛剛發現了一朵小花，送給你！ ✿",
+  "散步的時候，記得抬頭看看天空喔 ♡",
+  "帶著身上的小花紋，陪你一起去散步 ♡",
+  "呱！今天也陪你微笑，慢慢來就好 ♡",
+  "帶著小尾巴出發！今天想去哪座島探險？ ♡",
+];

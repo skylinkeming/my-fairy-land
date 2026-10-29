@@ -12,11 +12,13 @@ import {
 } from "./board-art.js";
 import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RESIDENT_GREETINGS } from "./residents.js";
 export function createWorld(
   container,
   onSelect,
   icon,
   onReminder = () => onSelect("todo"),
+  { residentInfo = [], onResidentSelect = () => {} } = {},
 ) {
   const canvas = container.querySelector("canvas"),
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -45,6 +47,7 @@ export function createWorld(
   controls.update();
   controls.saveState();
   let focusedResident = null;
+  let interactingResident = null;
   function stopFollowing() {
     focusedResident = null;
     delete container.dataset.focusedResident;
@@ -789,6 +792,51 @@ export function createWorld(
     sessionStorage.setItem("little-island-last-activity", life.initialMode);
   } catch {}
   const activityBadge = document.querySelector("#resident-activity");
+  const residentDialog = document.createElement("section");
+  residentDialog.className = "resident-dialog";
+  residentDialog.hidden = true;
+  residentDialog.setAttribute("aria-label", "娃娃問候");
+  residentDialog.innerHTML = '<div role="status"><strong></strong><p></p></div><small>拖曳旋轉視角，從各個方向看看我 ♡</small><button type="button">繼續去玩吧</button>';
+  container.append(residentDialog);
+  function finishResidentVisit() {
+    if (interactingResident !== null) life.resume(interactingResident);
+    interactingResident = null;
+    delete container.dataset.pausedResident;
+    residentDialog.hidden = true;
+    controls.minPolarAngle = .4;
+    controls.maxPolarAngle = 1.22;
+    stopFollowing();
+  }
+  residentDialog.querySelector("button").onclick = finishResidentVisit;
+  function visitResident(index) {
+    const resident = residents[index];
+    if (!resident) return;
+    finishResidentVisit();
+    interactingResident = index;
+    life.pause(index);
+    container.dataset.pausedResident = String(index);
+    residentDialog.querySelector("strong").textContent = residentInfo[index]?.name || "小島居民";
+    residentDialog.querySelector("p").textContent = RESIDENT_GREETINGS[index] || "你好呀，很高興見到你！";
+    residentDialog.hidden = false;
+    onResidentSelect(index);
+    // Clear residual orbit momentum, then hold the paused doll at the orbit centre.
+    controls.enableDamping = false;
+    controls.update();
+    const target = resident.g.position.clone().add(new T.Vector3(0, .85, 0));
+    const heading = resident.g.rotation.y + .65;
+    controls.target.copy(target);
+    camera.position.copy(target).add(new T.Vector3(Math.sin(heading) * 35, 32, Math.cos(heading) * 35));
+    camera.zoom = 8;
+    camera.updateProjectionMatrix();
+    controls.minPolarAngle = .08;
+    controls.maxPolarAngle = Math.PI - .08;
+    controls.mouseButtons.LEFT = T.MOUSE.ROTATE;
+    controls.touches.ONE = T.TOUCH.ROTATE;
+    controls.update();
+    controls.enableDamping = true;
+    focusedResident = index;
+    container.dataset.focusedResident = String(index);
+  }
   function updateActivityBadge() {
     container.dataset.residentActivity = life.mode;
     if (activityBadge) activityBadge.textContent = ACTIVITY_LABELS[life.mode];
@@ -1053,7 +1101,7 @@ export function createWorld(
                 ? Math.sin(activityTime * 1.4 + actor.phase + j) * .12
                 : 0;
         });
-        if (!reduced && t < greetUntil && i === greetIndex && !seated) {
+        if (!reduced && !life.isPaused(i) && t < greetUntil && i === greetIndex && !seated) {
           r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.14;
           r.arms[1].rotation.z = -1.2 + Math.sin(t * 7) * 0.4;
         }
@@ -1161,6 +1209,15 @@ export function createWorld(
       ),
       camera,
     );
+    const residentHit = ray.intersectObjects(residents.map(resident => resident.g), true)[0];
+    if (residentHit) {
+      const index = residents.findIndex(resident => {
+        let object = residentHit.object;
+        while (object) { if (object === resident.g) return true; object = object.parent; }
+        return false;
+      });
+      if (index !== -1) { visitResident(index); return; }
+    }
     const hit = ray.intersectObjects(
       todoBalloon.visible ? [...selectable, ...balloonParts] : selectable,
     )[0];
@@ -1175,6 +1232,7 @@ export function createWorld(
     dispose() {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+      residentDialog.remove();
       controls.dispose();
       scene.traverse((object) => {
         object.geometry?.dispose();
@@ -1196,39 +1254,22 @@ export function createWorld(
       canvas.style.cursor = enabled ? "grab" : "";
     },
     reset() {
-      stopFollowing();
+      finishResidentVisit();
       controls.reset();
       camera.zoom = defaultZoom;
       camera.updateProjectionMatrix();
     },
-    focusIsland() {},
+    focusIsland() { finishResidentVisit(); },
     setTodoReminder(count) {
       todoBalloon.visible = count > 0;
     },
     getResidentActivities() {
       return life.descriptions();
     },
-    focusResident(index) {
-      const resident = residents[index];
-      if (!resident) return;
-      // Remove residual orbit momentum so selecting a doll is immediate.
-      controls.enableDamping = false;
-      controls.update();
-      const target = resident.g.position.clone().add(new T.Vector3(0, .85, 0));
-      const heading = resident.g.rotation.y + .65;
-      controls.target.copy(target);
-      camera.position.copy(target).add(new T.Vector3(
-        Math.sin(heading) * 35, 32, Math.cos(heading) * 35,
-      ));
-      camera.zoom = 8;
-      camera.updateProjectionMatrix();
-      controls.update();
-      controls.enableDamping = true;
-      focusedResident = index;
-      container.dataset.focusedResident = String(index);
-    },
+    focusResident: visitResident,
+    endResidentVisit: finishResidentVisit,
     watchResidents() {
-      stopFollowing();
+      finishResidentVisit();
       const actor = life.actors[0];
       const target =
         life.mode === "wander" ? actor : { x: PARK.x, z: PARK.z + 1.5 };
@@ -1240,11 +1281,12 @@ export function createWorld(
       camera.updateProjectionMatrix();
     },
     tour() {
-      stopFollowing();
+      finishResidentVisit();
       camera.zoom = Math.max(defaultZoom, 1.2);
       camera.updateProjectionMatrix();
     },
     greet(i) {
+      visitResident(i);
       greetIndex = i;
       greetUntil = clock.getElapsedTime() + 3;
     },

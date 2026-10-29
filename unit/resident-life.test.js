@@ -62,6 +62,13 @@ test("walking residents move continuously and actually arrive on another island"
   const life = createResidentLife({ nodes, links, random: () => 0.1 });
   assert.equal(life.mode, "wander");
   assert.equal(life.actors.length, 6);
+  // Validate an uninterrupted crossing. Meeting a friend may now intentionally
+  // replace a walker's destination rather than eventually resume this journey.
+  const walker = life.actors.find(actor => actor.activity === "wander");
+  const start = {x: 0, z: 1.6}, end = {x: -13.8, z: 1.6};
+  Object.assign(walker, {node: "home", x: start.x, z: start.z,
+    route: routeBetweenIslands("home", "todo", nodes, links, start, end),
+    routeIndex: 1, target: {node: "todo", point: end, state: "waiting"}});
   const starts = life.actors.map((a) => a.node);
   let arrived = false;
   for (let step = 0; step < 450; step++) {
@@ -152,7 +159,7 @@ test("a mixed day has a walking pair, a seated chatting pair and a solitary fore
     life.update(.1);
     assert.ok(Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z) >= 1.18);
     assert.ok(Math.abs(pair[0].z - pair[1].z) < .1, "companions walk alongside and wait for each other");
-    assert.ok(pair.every(actor => !actor.detour), "companions do not randomly flee each other");
+    assert.ok(pair.every(actor => !actor.departure), "companions do not randomly flee each other");
     for (const [j, actor] of seated.entries()) {
       assert.equal(actor.x, seats[j].x);
       assert.equal(actor.z, seats[j].z);
@@ -169,7 +176,7 @@ test("a mixed day has a walking pair, a seated chatting pair and a solitary fore
   assert.ok(life.descriptions().every(description => typeof description.label === "string"));
 });
 
-test("head-on walkers pass without overlapping or teleporting", () => {
+test("head-on walkers separate and continue away without overlapping or teleporting", () => {
   const life = createResidentLife({nodes,links,random:()=>.1,count:2});
   for (const [i,actor] of life.actors.entries()) {
     actor.x = i ? 2 : -2; actor.z = 2;
@@ -177,14 +184,14 @@ test("head-on walkers pass without overlapping or teleporting", () => {
     actor.route = [{x:actor.x,z:2},{x:-actor.x,z:2}]; actor.routeIndex=1;
     actor.target = {node:"home",point:actor.route[1],state:"waiting"};
   }
-  for (let i=0;i<150;i++) {
+  for (let i=0;i<60;i++) {
     const before=life.actors.map(actor=>({x:actor.x,z:actor.z}));
     life.update(.05);
     const [a,b]=life.actors;
     assert.ok(Math.hypot(a.x-b.x,a.z-b.z)>=1.18-1e-6);
     life.actors.forEach((actor,index)=>assert.ok(Math.hypot(actor.x-before[index].x,actor.z-before[index].z)<=.0476));
   }
-  assert.ok(life.actors[0].x>1 && life.actors[1].x< -1,"both dolls must pass and continue");
+  assert.ok(life.actors[0].x< -1 && life.actors[1].x>1,"both dolls must keep walking in their new directions");
 });
 
 test("nearby approaching walkers randomly turn apart before touching", () => {
@@ -200,16 +207,50 @@ test("nearby approaching walkers randomly turn apart before touching", () => {
     }
     life.update(.1);
     const [a, b] = life.actors;
-    assert.ok(a.detour && b.detour, "both walkers should choose an escape direction");
+    assert.ok(a.departure && b.departure, "both walkers should choose a new walking direction");
+    assert.equal(a.target, null, "discard the old destination rather than resume it");
+    assert.equal(b.target, null);
+    assert.deepEqual(a.route, []);
+    assert.deepEqual(b.route, []);
     assert.ok(a.x < -.9 && b.x > .9, "walk away from each other before reaching minimum spacing");
     assert.ok(Math.cos(a.heading - b.heading) < -.4, "escape headings should point apart");
     headings.push(a.heading);
     life.update(.8);
     assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 3, "keep walking away rather than turn back immediately");
-    life.update(1.2);
-    assert.ok(!a.detour && !b.detour, "resume the existing route after the escape");
+    const positions = [a, b].map(actor => ({x: actor.x, z: actor.z, heading: actor.heading}));
+    life.update(2.2);
+    [a, b].forEach((actor, i) => {
+      const before = positions[i];
+      const forward = (actor.x - before.x) * Math.sin(before.heading) +
+        (actor.z - before.z) * Math.cos(before.heading);
+      assert.ok(forward > 1.9, "continue forward beyond the former 1.8-second detour timeout");
+      assert.ok(actor.departure, "do not fall back to the old route");
+    });
   }
   assert.ok(Math.abs(headings[0] - headings[1]) > .5, "random draws should produce different turns");
+});
+
+test("visiting one doll freezes its walk until released while the others carry on", () => {
+  const life = createResidentLife({nodes, links, random: () => .1, count: 2});
+  life.actors.forEach((actor, i) => {
+    const x = i ? 3 : -3;
+    Object.assign(actor, {x, z: 2, node: "home", state: "walking", activity: "wander", partner: null,
+      route: [{x, z: 2}, {x: i ? 4 : -4, z: 2}], routeIndex: 1,
+      target: {node: "home", point: {x: i ? 4 : -4, z: 2}, state: "waiting"}});
+  });
+  life.update(.2);
+  const [visitor, other] = life.actors;
+  life.pause(visitor.id);
+  const frozen = structuredClone(visitor), otherWalkTime = other.walkTime;
+  life.update(60);
+  assert.deepEqual(visitor, frozen, "position, direction and animation clocks remain fixed through a long visit");
+  assert.ok(other.walkTime > otherWalkTime, "other residents must remain active");
+  assert.equal(life.descriptions()[visitor.id].label, "停下來和你打招呼");
+  assert.equal(life.mode, "wander", "do not swap the visitor's activity during inspection");
+  life.resume(visitor.id);
+  life.update(.2);
+  assert.equal(life.isPaused(visitor.id), false);
+  assert.ok(visitor.walkTime > frozen.walkTime, "walking resumes after saying goodbye");
 });
 
 test("walking dolls stay separated through crowded activity transitions", () => {
