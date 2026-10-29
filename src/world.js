@@ -1,4 +1,5 @@
 import * as T from "three";
+import { createDinosaur } from "./dinosaur.js";
 import { createFrog } from "./frog.js";
 import { createFloralBear } from "./floral-bear.js";
 import { createPlushArt } from "./plush-art.js";
@@ -865,6 +866,9 @@ export function createWorld(
   const frog = createFrog(plushArt);
   scene.add(frog.g);
   residents.push(frog);
+  const dinosaur = createDinosaur(plushArt);
+  scene.add(dinosaur.g);
+  residents.push(dinosaur);
   const clouds = [];
   for (const [x, y, z, s] of [
     [-9, 5, -7, 1],
@@ -1167,6 +1171,7 @@ export function createWorld(
         object.geometry?.dispose();
       });
       for (const material of mats.values()) material.dispose();
+      dinosaur.dispose();
       frog.dispose();
       floralBear.dispose();
       plushArt.dispose();
