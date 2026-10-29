@@ -12,18 +12,17 @@ import {
 } from "./board-art.js";
 import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { RESIDENT_GREETINGS } from "./residents.js";
-import { createResidentEditor } from "./resident-editor.js";
-import { applyResidentShape, disposeShapeGeometry } from "./resident-shape.js";
+import { applyResidentShape, disposeShapeGeometry, RESIDENT_SHAPE_IDS } from "./resident-shape.js";
 export function createWorld(
   container,
   onSelect,
   icon,
   onReminder = () => onSelect("todo"),
-  { residentInfo = [], onResidentSelect = () => {} } = {},
+  { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
 ) {
   const canvas = container.querySelector("canvas"),
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  let frameDirty = true, reduced = Boolean(reducedMotion);
   renderer.setClearColor(0xf8f8f0, 0);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = true;
@@ -37,7 +36,7 @@ export function createWorld(
   let defaultZoom = innerWidth <= 760 ? 1.4 : 1;
   camera.zoom = defaultZoom;
   const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true;
+  controls.enableDamping = !reduced;
   controls.minZoom = 0.68;
   controls.maxZoom = 8;
   controls.enablePan = true;
@@ -793,38 +792,24 @@ export function createWorld(
   try {
     sessionStorage.setItem("little-island-last-activity", life.initialMode);
   } catch {}
-  const activityBadge = document.querySelector("#resident-activity");
-  const residentDialog = document.createElement("section");
-  residentDialog.className = "resident-dialog";
-  residentDialog.hidden = true;
-  residentDialog.setAttribute("aria-label", "娃娃問候");
-  residentDialog.innerHTML = '<div role="status"><strong></strong><p></p></div><small>拖曳旋轉視角，從各個方向看看我 ♡</small><button type="button">繼續去玩吧</button>';
-  container.append(residentDialog);
   function finishResidentVisit() {
     if (interactingResident !== null) life.resume(interactingResident);
     interactingResident = null;
     delete container.dataset.pausedResident;
-    residentDialog.hidden = true;
+    onVisitChange(null);
     controls.minPolarAngle = .4;
     controls.maxPolarAngle = 1.22;
     stopFollowing();
   }
-  residentDialog.querySelector("button").onclick = finishResidentVisit;
-  const editButton = document.createElement("button");
-  editButton.type = "button";
-  editButton.textContent = "調整造型";
-  editButton.onclick = () => openResidentEditor(interactingResident ?? 0);
-  residentDialog.append(editButton);
   function visitResident(index) {
+    frameDirty = true;
     const resident = residents[index];
     if (!resident) return;
     finishResidentVisit();
     interactingResident = index;
     life.pause(index);
     container.dataset.pausedResident = String(index);
-    residentDialog.querySelector("strong").textContent = residentInfo[index]?.name || "小島居民";
-    residentDialog.querySelector("p").textContent = RESIDENT_GREETINGS[index] || "你好呀，很高興見到你！";
-    residentDialog.hidden = false;
+    onVisitChange(index);
     onResidentSelect(index);
     // Clear residual orbit momentum, then hold the paused doll at the orbit centre.
     controls.enableDamping = false;
@@ -840,13 +825,13 @@ export function createWorld(
     controls.mouseButtons.LEFT = T.MOUSE.ROTATE;
     controls.touches.ONE = T.TOUCH.ROTATE;
     controls.update();
-    controls.enableDamping = true;
+    controls.enableDamping = !reduced;
     focusedResident = index;
     container.dataset.focusedResident = String(index);
   }
   function updateActivityBadge() {
     container.dataset.residentActivity = life.mode;
-    if (activityBadge) activityBadge.textContent = ACTIVITY_LABELS[life.mode];
+    onActivityChange({mode: life.mode, label: ACTIVITY_LABELS[life.mode]});
   }
   updateActivityBadge();
   life.update(0);
@@ -936,12 +921,15 @@ export function createWorld(
   const dinosaur = createDinosaur(plushArt);
   scene.add(dinosaur.g);
   residents.push(dinosaur);
-  const shapeEditor = createResidentEditor({residents, residentInfo,
-    onApply(index, shape) { applyResidentShape(residents[index].g, shape); },
-  });
+  const residentTemplates = residents.map(resident => resident.g.clone(true));
+  function setResidentShapes(settings) {
+    frameDirty = true;
+    residents.forEach((resident, index) => applyResidentShape(resident.g, settings[RESIDENT_SHAPE_IDS[index]]));
+  }
+  setResidentShapes(residentShapes);
   function openResidentEditor(index = 0) {
     finishResidentVisit();
-    shapeEditor.open(index);
+    onEditResident(index);
   }
   const clouds = [];
   for (const [x, y, z, s] of [
@@ -1039,6 +1027,7 @@ export function createWorld(
     width = container.clientWidth;
     height = container.clientHeight;
     if (!width || !height) return;
+    frameDirty = true;
     renderer.setSize(width, height, false);
     const nextDefaultZoom = width < 600 ? 1.4 : 1;
     if (camera.zoom === defaultZoom) camera.zoom = nextDefaultZoom;
@@ -1054,8 +1043,7 @@ export function createWorld(
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
   resize();
-  const clock = new T.Clock(),
-    reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const clock = new T.Clock();
   let greetUntil = 0,
     greetIndex = 0;
   let animationFrame,
@@ -1063,7 +1051,7 @@ export function createWorld(
   function animate() {
     animationFrame = requestAnimationFrame(animate);
     // Do not spend GPU time on scenery hidden behind journals or background tabs.
-    if (document.hidden || document.body.classList.contains("modal-open") || document.body.classList.contains("resident-editor-open"))
+    if (document.hidden || isUiCovered())
       return;
     const t = clock.getElapsedTime();
     if (focusedResident !== null) {
@@ -1072,7 +1060,7 @@ export function createWorld(
       camera.position.add(target.clone().sub(controls.target));
       controls.target.copy(target);
     }
-    controls.update();
+    const cameraChanged = controls.update();
     const dt = Math.min(0.05, Math.max(0, t - lastFrameTime));
     lastFrameTime = t;
     const activityTime = reduced ? 0 : t;
@@ -1209,10 +1197,14 @@ export function createWorld(
     }
     const p = new T.Vector3(0, 1.1, PARK.z).project(camera);
     hl.style.transform = `translate(-50%,0) translate(${(p.x * 0.5 + 0.5) * width}px,${(-p.y * 0.5 + 0.5) * height}px)`;
-    renderer.render(scene, camera);
+    // Static scenes need no GPU redraw until a command, resize or camera move.
+    if (!reduced || cameraChanged || frameDirty) {
+      renderer.render(scene, camera);
+      frameDirty = false;
+    }
   }
   animate();
-  container.querySelector(".world-loading").remove();
+  onReady();
   const ray = new T.Raycaster();
   let down;
   canvas.addEventListener(
@@ -1252,9 +1244,7 @@ export function createWorld(
     dispose() {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
-      shapeEditor.dispose();
       residents.forEach(resident => disposeShapeGeometry(resident.g));
-      residentDialog.remove();
       controls.dispose();
       scene.traverse((object) => {
         object.geometry?.dispose();
@@ -1266,7 +1256,15 @@ export function createWorld(
       plushArt.dispose();
       renderer.dispose();
     },
+    setReducedMotion(enabled) {
+      reduced = enabled;
+      // Reduced motion also removes inertial camera movement after a drag.
+      controls.enableDamping = !enabled;
+      controls.update();
+      frameDirty = true;
+    },
     zoom(f) {
+      frameDirty = true;
       camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 8);
       camera.updateProjectionMatrix();
     },
@@ -1276,6 +1274,7 @@ export function createWorld(
       canvas.style.cursor = enabled ? "grab" : "";
     },
     reset() {
+      frameDirty = true;
       finishResidentVisit();
       controls.reset();
       camera.zoom = defaultZoom;
@@ -1283,6 +1282,7 @@ export function createWorld(
     },
     focusIsland() { finishResidentVisit(); },
     setTodoReminder(count) {
+      frameDirty = true;
       todoBalloon.visible = count > 0;
     },
     getResidentActivities() {
@@ -1290,8 +1290,11 @@ export function createWorld(
     },
     focusResident: visitResident,
     editResident: openResidentEditor,
+    getResidentTemplate(index) { return residentTemplates[index]?.clone(true); },
+    setResidentShapes,
     endResidentVisit: finishResidentVisit,
     watchResidents() {
+      frameDirty = true;
       finishResidentVisit();
       const actor = life.actors[0];
       const target =
@@ -1304,6 +1307,7 @@ export function createWorld(
       camera.updateProjectionMatrix();
     },
     tour() {
+      frameDirty = true;
       finishResidentVisit();
       camera.zoom = Math.max(defaultZoom, 1.2);
       camera.updateProjectionMatrix();

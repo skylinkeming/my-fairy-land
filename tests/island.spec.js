@@ -199,7 +199,7 @@ test("GPU context loss switches to the usable illustrated map", async ({
 test("failed main module shows a readable retry screen instead of an empty page", async ({
   page,
 }) => {
-  await page.route("**/src/main.js*", (route) => route.abort());
+  await page.route("**/src/main.jsx*", (route) => route.abort());
   await page.reload();
   await expect(page.locator(".boot-message")).toBeVisible();
   await expect(page.locator("#boot-retry")).toBeVisible();
@@ -721,7 +721,7 @@ test('shape studio previews, saves, reloads, exports and imports resident settin
   const editor = page.locator('.resident-editor');
   const width = editor.getByRole('slider', {name: '肚子胖度', exact: true});
   const change = async (slider, value) => slider.evaluate((input, n) => {
-    input.value = String(n); input.dispatchEvent(new Event('input', {bubbles: true}));
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, String(n)); input.dispatchEvent(new Event('input', {bubbles: true}));
   }, value);
   await expect(editor.getByRole('combobox')).toHaveValue('4');
   await expect(width).toHaveValue('1');
@@ -777,11 +777,29 @@ test('shape studio fits a phone and can edit the dinosaur tail', async ({page}, 
   const editor = page.locator('.resident-editor');
   await expect(editor).toBeVisible();
   expect(await editor.locator('.resident-editor-shell').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await editor.getByRole('slider', {name: '尾巴大小'}).evaluate(input => {input.value = '1.3'; input.dispatchEvent(new Event('input', {bubbles: true}));});
+  await editor.getByRole('slider', {name: '尾巴大小'}).evaluate(input => {Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '1.3'); input.dispatchEvent(new Event('input', {bubbles: true}));});
   await editor.getByRole('button', {name: '儲存並套用', exact: true}).click();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('little-island-shapes-v1')).residents['pink-dinosaur'].tailSize)).toBe(1.3);
   await editor.locator('.resident-editor-shell').evaluate(element => {element.scrollTop = 0;});
   await editor.screenshot({path: testInfo.outputPath('shape-studio-mobile.png')});
   await page.keyboard.press('Escape');
   await expect(editor).toBeHidden();
+});
+
+test('React data updates preserve the existing Three.js canvas and scene labels', async ({page}) => {
+  const canvas = await page.locator('#world-canvas').elementHandle();
+  const label = await page.locator('.label-todo').elementHandle();
+  const initialCount = parseInt(await page.locator('#count-todo').textContent(), 10);
+  await page.locator('[data-open="todo"]').first().click();
+  await page.locator('#todo-text').fill('React 介面更新不重建 3D 場景');
+  await page.getByRole('button', {name: '新增', exact: true}).click();
+  await expect(page.locator('.todo-row').first()).toContainText('React 介面更新不重建 3D 場景');
+  await expect(page.locator('#count-todo')).toContainText(`${initialCount + 1} 件小事`);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#modal')).toBeHidden();
+  expect(await page.evaluate(node => node === document.querySelector('#world-canvas'), canvas)).toBe(true);
+  expect(await page.evaluate(node => node === document.querySelector('.label-todo'), label)).toBe(true);
+  await expect(page.locator('.map-label')).toHaveCount(4);
+  await page.locator('.label-todo').click();
+  await expect(page.locator('.todo-row').first()).toContainText('React 介面更新不重建 3D 場景');
 });

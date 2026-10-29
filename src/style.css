@@ -3486,3 +3486,7 @@ body.resident-editor-open { overflow: hidden; }
   .resident-editor-views button { font-size: 12px; padding: 6px 12px; }
   .resident-editor-stage > p { bottom: 12px; font-size: 10px; }
 }
+
+/* React owns controls; Three.js owns only its canvas and projected label host. */
+.resident-art > span:first-child { display: contents; }
+.illustration-host { position: absolute; inset: 0; }
