@@ -1,20 +1,20 @@
 import * as T from "three";
 
-// Front and four angled references: pink plush, projecting muzzle, ivory underside, three felt fins.
+// Main side reference: oversized rounded muzzle, squat body, ivory bib and lavender felt scallops.
 // The photographed key chain, attachment loop and sewn label are intentionally absent.
 export function createDinosaur(art) {
   const g = new T.Group();
   g.name = "pink-dinosaur";
   g.scale.setScalar(.85);
-  const pink = "#e78ba8", ivory = "#f0e8d7", purple = "#ad8acb";
+  const pink = "#e981a3", ivory = "#f2ecdf", purple = "#ac86cd";
   const torso = art.ball(1, pink, 0, 0, 0, g);
   const torsoGeometry = torso.geometry.clone();
   function torsoPoint(x, y, z) {
     const u = T.MathUtils.clamp((y + 1) / 2, 0, 1);
     return new T.Vector3(
-      .38 * x * (1 - .18 * u),
-      .12 + 1.27 * Math.pow(u, 1.6),
-      -.09 + .31 * z,
+      .43 * x * (1 - .22 * u),
+      .12 + 1.28 * Math.pow(u, 1.7),
+      -.10 + .36 * z,
     );
   }
   const vertices = torsoGeometry.attributes.position;
@@ -37,38 +37,66 @@ export function createDinosaur(art) {
     fibers.instanceMatrix.needsUpdate = true;
     fibers.computeBoundingSphere();
   }
-  art.ball(.43, pink, 0, 1.25, .18, g, [1.04, .97, 1.25]);
-  art.ball(.33, ivory, 0, .99, .33, g, [1.18, .39, 1.12]);
-  art.ball(.265, ivory, 0, .59, .13, g, [1, 1.85, .55]);
+  // A softly squared oval makes the snout broad and blunt like the plush photo.
+  const head = art.ball(.47, pink, 0, 1.28, .23, g, [1.04, 1.02, 1.36]);
+  const headGeometry = head.geometry.clone();
+  const roundHead = point => {
+    for (const axis of ["x", "y", "z"]) {
+      point[axis] = Math.sign(point[axis]) * Math.pow(Math.abs(point[axis]), .82);
+    }
+    return point;
+  };
+  const headVertices = headGeometry.attributes.position;
+  for (let i = 0; i < headVertices.count; i++) {
+    const point = roundHead(new T.Vector3().fromBufferAttribute(headVertices, i));
+    headVertices.setXYZ(i, point.x, point.y, point.z);
+  }
+  headGeometry.computeVertexNormals();
+  head.geometry = headGeometry;
+  for (const fibers of head.children) if (fibers.isInstancedMesh) {
+    const matrix = new T.Matrix4(), position = new T.Vector3();
+    const rotation = new T.Quaternion(), scale = new T.Vector3();
+    for (let i = 0; i < fibers.count; i++) {
+      fibers.getMatrixAt(i, matrix);
+      matrix.decompose(position, rotation, scale);
+      roundHead(position);
+      matrix.compose(position, rotation, scale);
+      fibers.setMatrixAt(i, matrix);
+    }
+    fibers.instanceMatrix.needsUpdate = true;
+    fibers.computeBoundingSphere();
+  }
+  art.ball(.35, ivory, 0, .94, .43, g, [1.18, .34, 1.15]);
+  art.ball(.29, ivory, 0, .57, .20, g, [1, 1.48, .55]);
   // Small side-set embroidered eyes and a single white stitch in each eye.
   for (const side of [-1, 1]) {
-    art.ball(.049, "#25232b", side * .43, 1.30, .25, g, [.33, 1, 1], "fabric");
-    art.ball(.012, "#fff9ed", side * .447, 1.309, .265, g, [.3, .85, .8], "smooth");
+    art.ball(.064, "#201e24", side * .482, 1.36, .32, g, [.30, 1, 1], "fabric");
+    art.ball(.015, "#fff9ed", side * .499, 1.369, .339, g, [.3, .85, .8], "smooth");
   }
   const arms = [-1, 1].map(side =>
-    art.ball(.105, pink, side * .265, .66, .14, g, [.55, 1.45, .9]),
+    art.ball(.115, pink, side * .33, .61, .23, g, [.55, 1.52, .85]),
   );
   const feet = [-1, 1].map(side => {
-    const foot = art.ball(.205, pink, side * .29, .12, .18, g, [.95, .69, 1.5]);
+    const foot = art.ball(.22, pink, side * .285, .13, .22, g, [1.02, .70, 1.78]);
     foot.rotation.y = side * .32;
-    foot.userData.restY = .12;
-    foot.userData.restZ = .18;
+    foot.userData.restY = .13;
+    foot.userData.restZ = .22;
     return foot;
   });
-  const tail = art.ball(.19, pink, 0, .37, -.40, g, [.72, .78, 1.65]);
-  tail.rotation.x = .55;
+  const tail = art.ball(.18, pink, 0, .39, -.45, g, [.80, .85, 1.7]);
+  tail.rotation.x = .65;
   // The soft scallops are thin felt plates along the centre of the back.
-  for (const [y, z, radius] of [[1.59,-.12,.135],[1.38,-.255,.145],[1.15,-.30,.125]]) {
-    art.ball(radius, purple, 0, y, z, g, [.3, 1.15, 1]);
+  for (const [y, z, radius] of [[1.65,-.23,.16],[1.41,-.39,.17],[1.14,-.43,.14]]) {
+    art.ball(radius, purple, 0, y, z, g, [.26, 1.15, 1]);
   }
   const stitch = new T.MeshStandardMaterial({color: "#ab637d", roughness: 1});
   for (const side of [-1, 1]) {
     const curve = new T.QuadraticBezierCurve3(
-      new T.Vector3(side * .20, 1.037, .605),
-      new T.Vector3(side * .235, 1.015, .56),
-      new T.Vector3(side * .25, 1.045, .515),
+      new T.Vector3(side * .29, 1.035, .76),
+      new T.Vector3(side * .32, 1.012, .70),
+      new T.Vector3(side * .34, 1.04, .65),
     );
     g.add(new T.Mesh(new T.TubeGeometry(curve, 12, .005, 6, false), stitch));
   }
-  return {g, arms, feet, dispose() { torsoGeometry.dispose(); stitch.dispose(); }};
+  return {g, arms, feet, dispose() { torsoGeometry.dispose(); headGeometry.dispose(); stitch.dispose(); }};
 }
