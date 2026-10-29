@@ -160,6 +160,7 @@ export function createResidentLife({
   }
   function begin(actor) {
     const target = goal(actor);
+    actor.detour = null;
     actor.goalMode = mode;
     actor.target = target;
     actor.route = routeBetweenIslands(
@@ -240,6 +241,40 @@ export function createResidentLife({
     actor.yielding = true;
     return false;
   }
+  function turnApart() {
+    for (let i = 0; i < actors.length; i++) for (let j = i + 1; j < actors.length; j++) {
+      const a = actors[i], b = actors[j];
+      if (a.state !== "walking" && b.state !== "walking") continue;
+      if ([a, b].some(actor => actor.detour || elapsed < (actor.turnCooldown || 0))) continue;
+      // Keep bridge traffic on its safe, single-file route.
+      if (bridges.some(bridge => inBridge(a, bridge, 1.5, 1) || inBridge(b, bridge, 1.5, 1))) continue;
+      const dx = b.x - a.x, dz = b.z - a.z, gap = Math.hypot(dx, dz);
+      if (gap > 1.9 || gap < 1e-6) continue;
+      const approaching = actor => {
+        const next = actor.route?.[actor.routeIndex];
+        if (actor.state !== "walking" || !next) return false;
+        const other = actor === a ? b : a;
+        return (next.x - actor.x) * (other.x - actor.x) +
+          (next.z - actor.z) * (other.z - actor.z) > 0;
+      };
+      if (!approaching(a) && !approaching(b)) continue;
+      for (const [actor, other] of [[a, b], [b, a]]) {
+        if (actor.state !== "walking") continue;
+        const away = Math.atan2(actor.x - other.x, actor.z - other.z);
+        const variation = (random() - .5) * 1.1;
+        // Try both sides at a shoreline; never send a doll into the sea.
+        for (const offset of [variation, -variation, 0]) {
+          const heading = away + offset;
+          const point = {x: actor.x + Math.sin(heading) * 1.4,
+            z: actor.z + Math.cos(heading) * 1.4};
+          if (!onGround(point) || bridges.some(bridge => inBridge(point, bridge, 1.5, 1))) continue;
+          actor.detour = {point, until: elapsed + 1.8};
+          actor.turnCooldown = elapsed + 5;
+          break;
+        }
+      }
+    }
+  }
   function step(dt) {
 
     elapsed += dt;
@@ -251,6 +286,8 @@ export function createResidentLife({
       const owner = actors.find(actor => actor.id === bridge.owner);
       if (!owner || !inBridge(owner, bridge, 1.4, .85)) bridge.owner = null;
     }
+    for (const actor of actors) if (actor.detour && elapsed >= actor.detour.until) actor.detour = null;
+    turnApart();
     for (const actor of [...actors].sort((a, b) => Number(a.state === "walking") - Number(b.state === "walking"))) {
       const before = {x: actor.x, z: actor.z, yOffset: actor.yOffset,
         heading: actor.heading, swingAngle: actor.swingAngle,
@@ -259,8 +296,11 @@ export function createResidentLife({
       actor.swingAngle = 0;
       if (actor.state !== "walking" && actor.goalMode !== mode) begin(actor);
       if (actor.state === "walking") {
-        const next = actor.route[actor.routeIndex];
-        if (next && moveWalker(actor, next, dt * .95)) actor.routeIndex++;
+        const next = actor.detour?.point || actor.route[actor.routeIndex];
+        if (next && moveWalker(actor, next, dt * .95)) {
+          if (actor.detour) actor.detour = null;
+          else actor.routeIndex++;
+        }
         actor.yOffset = Math.abs(Math.sin(actor.walkTime * 8)) * 0.04;
         if (actor.routeIndex >= actor.route.length) {
           actor.node = actor.target.node;

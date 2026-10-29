@@ -141,6 +141,31 @@ test("head-on walkers pass without overlapping or teleporting", () => {
   assert.ok(life.actors[0].x>1 && life.actors[1].x< -1,"both dolls must pass and continue");
 });
 
+test("nearby approaching walkers randomly turn apart before touching", () => {
+  const headings = [];
+  for (const draw of [.1, .9]) {
+    const life = createResidentLife({nodes, links, random: () => draw, count: 2});
+    for (const [i, actor] of life.actors.entries()) {
+      actor.x = i ? .9 : -.9; actor.z = 2;
+      actor.node = "home"; actor.state = "walking"; actor.goalMode = life.mode;
+      actor.route = [{x: actor.x, z: 2}, {x: i ? -3 : 3, z: 2}];
+      actor.routeIndex = 1;
+      actor.target = {node: "home", point: actor.route[1], state: "waiting"};
+    }
+    life.update(.1);
+    const [a, b] = life.actors;
+    assert.ok(a.detour && b.detour, "both walkers should choose an escape direction");
+    assert.ok(a.x < -.9 && b.x > .9, "walk away from each other before reaching minimum spacing");
+    assert.ok(Math.cos(a.heading - b.heading) < -.4, "escape headings should point apart");
+    headings.push(a.heading);
+    life.update(.8);
+    assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 3, "keep walking away rather than turn back immediately");
+    life.update(1.2);
+    assert.ok(!a.detour && !b.detour, "resume the existing route after the escape");
+  }
+  assert.ok(Math.abs(headings[0] - headings[1]) > .5, "random draws should produce different turns");
+});
+
 test("walking dolls stay separated through crowded activity transitions", () => {
   for (let seed=1;seed<=20;seed++) {
     let state=seed;
