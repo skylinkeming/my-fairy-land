@@ -190,3 +190,30 @@ test('failed main module shows a readable retry screen instead of an empty page'
   await expect(page.locator('#boot-retry')).toBeVisible();
   await expect(page.locator('#boot-status')).toContainText('頁面資源未能完整載入');
 });
+
+test('todo island always reopens the list and shows only the last fourteen calendar days newest first', async ({page}) => {
+  await page.clock.setFixedTime(new Date('2026-10-29T04:00:00Z'));
+  await page.evaluate(() => {
+    const now=Date.now();
+    const boundary=new Date(now);boundary.setHours(0,0,0,0);boundary.setDate(boundary.getDate()-13);
+    const todo=(id,text,created)=>({id,text,created,date:'2026-10-29',done:false});
+    localStorage.setItem('little-island-v1',JSON.stringify({
+      todos:[todo('old','兩週之前',boundary.getTime()-1),todo('edge','兩週起點',boundary.getTime()),todo('new','最新待辦',now-1000),todo('mid','昨天待辦',now-86400000)],
+      notes:[],memories:[],residents:[]
+    }));
+  });
+  await page.reload();
+  await page.locator('.island-card[data-open="todo"]').click();
+  await expect(page.locator('.todo-text')).toHaveText(['最新待辦','昨天待辦','兩週起點']);
+  await page.getByRole('button',{name:'日曆',exact:true}).click();
+  await expect(page.locator('.calendar-task').filter({hasText:'兩週之前'})).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await page.locator('.label-todo').click();
+  await expect(page.locator('[data-view="list"]')).toHaveClass('active');
+  await expect(page.locator('.calendar-grid')).toHaveCount(0);
+  await expect(page.locator('.todo-text')).toHaveText(['最新待辦','昨天待辦','兩週起點']);
+  await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('little-island-v1'));s.todos=s.todos.filter(t=>t.id==='old');localStorage.setItem('little-island-v1',JSON.stringify(s));});
+  await page.reload();
+  await page.locator('.island-card[data-open="todo"]').click();
+  await expect(page.locator('.empty-state')).toContainText('近兩週還沒有新增待辦');
+});

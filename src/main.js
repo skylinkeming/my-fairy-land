@@ -48,21 +48,21 @@ const initial = {
       text: "一起去市場，買晚餐的食材",
       date: today,
       done: false,
-      created: 3,
+      created: Date.now(),
     },
     {
       id: "t2",
       text: "幫小熊洗個香香的澡",
       date: today,
       done: false,
-      created: 2,
+      created: Date.now() - 86400000,
     },
     {
       id: "t3",
       text: "週末一起散步，找一家新的咖啡店",
       date: dateString(new Date(Date.now() + 86400000 * 3)),
       done: false,
-      created: 1,
+      created: Date.now() - 86400000 * 2,
     },
   ],
   notes: [
@@ -199,6 +199,7 @@ function openPanel(id) {
   if (!island) return;
   returnFocus = document.activeElement;
   active = id;
+  if (id === "todo") todoView = "list";
   document.querySelector("#panel-kicker").textContent = island.en;
   document.querySelector("#panel-title").innerHTML =
     `<span class="panel-icon ${island.color}">${icon(id)}</span>${island.title}`;
@@ -229,10 +230,18 @@ function prettyDate(d) {
   });
 }
 function renderTodos() {
-  const pending = state.todos.filter((t) => !t.done).length;
-  const sorted = [...state.todos].sort((a, b) => b.created - a.created);
+  // Include today and the previous 13 calendar days in the browser's timezone.
+  const now = Date.now();
+  const since = new Date(now);
+  since.setHours(0, 0, 0, 0);
+  since.setDate(since.getDate() - 13);
+  const sorted = state.todos
+    .filter((t) => t.created >= since.getTime() && t.created <= now)
+    .sort((a, b) => b.created - a.created);
+  const visible = todoView === "list" ? sorted : state.todos;
+  const pending = visible.filter((t) => !t.done).length;
   document.querySelector("#panel-content").innerHTML =
-    `<div class="panel-toolbar"><span class="small-muted">${pending ? "還有 " + pending + " 件小事，慢慢來就好" : "今天的你，已經做得很好了 ✨"}</span><div class="view-switch"><button data-view="list" class="${todoView === "list" ? "active" : ""}">清單</button><button data-view="calendar" class="${todoView === "calendar" ? "active" : ""}">${icon("calendar")}日曆</button></div></div><form id="todo-form" class="add-todo"><label class="sr-only" for="todo-text">待辦事項</label><input id="todo-text" placeholder="有什麼想一起做的小事？" required maxlength="160"><label class="sr-only" for="todo-date">預定日期</label><input id="todo-date" type="date" value="${today}" required><button class="primary-button" type="submit">${icon("plus")}<span>新增</span></button></form><div id="todo-list">${todoView === "list" ? `<div class="todo-list">${sorted.length ? sorted.map(todoRow).join("") : '<div class="empty-state">✿<h3>今天留一點空白</h3><p>新增第一件想一起做的小事吧。</p></div>'}</div>` : calendar()}</div>`;
+    `<div class="panel-toolbar"><span class="small-muted">${pending ? "還有 " + pending + " 件小事，慢慢來就好" : "今天的你，已經做得很好了 ✨"}</span><div class="view-switch"><button data-view="list" class="${todoView === "list" ? "active" : ""}">清單</button><button data-view="calendar" class="${todoView === "calendar" ? "active" : ""}">${icon("calendar")}日曆</button></div></div><form id="todo-form" class="add-todo"><label class="sr-only" for="todo-text">待辦事項</label><input id="todo-text" placeholder="有什麼想一起做的小事？" required maxlength="160"><label class="sr-only" for="todo-date">預定日期</label><input id="todo-date" type="date" value="${today}" required><button class="primary-button" type="submit">${icon("plus")}<span>新增</span></button></form><p class="todo-range small-muted">${todoView === "list" ? "近兩週新增的待辦 · 最新在上" : "依預定日期查看所有待辦"}</p><div id="todo-list">${todoView === "list" ? `<div class="todo-list">${sorted.length ? sorted.map(todoRow).join("") : '<div class="empty-state">✿<h3>近兩週還沒有新增待辦</h3><p>新增想一起做的小事，或切換日曆查看其他日期。</p></div>'}</div>` : calendar()}</div>`;
   document.querySelector("#todo-form").onsubmit = (e) => {
     e.preventDefault();
     const text = document.querySelector("#todo-text").value.trim();
