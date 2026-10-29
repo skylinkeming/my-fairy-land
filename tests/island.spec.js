@@ -434,13 +434,139 @@ test("calendar completed deletion only removes items in the displayed month", as
   await expect(page.locator(".calendar-task")).toContainText("上月已完成");
 });
 
-test('residents and scenery remain still when reduced motion is requested',async({page})=>{
-  await page.emulateMedia({reducedMotion:'reduce'});
-  await page.reload();await expect(page.locator('.map-label')).toHaveCount(4);
-  const first=await page.locator('#world-canvas').screenshot();
+test("residents and scenery remain still when reduced motion is requested", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.locator(".map-label")).toHaveCount(4);
+  const first = await page.locator("#world-canvas").screenshot();
   await page.waitForTimeout(400);
-  const second=await page.locator('#world-canvas').screenshot();
+  const second = await page.locator("#world-canvas").screenshot();
   expect(first.equals(second)).toBe(true);
-  await page.locator('.label-todo').click();
-  await expect(page.locator('#todo-form')).toBeVisible();
+  await page.locator(".label-todo").click();
+  await expect(page.locator("#todo-form")).toBeVisible();
+});
+
+test("clicking todo text edits content and schedule without completing or reordering it", async ({
+  page,
+}) => {
+  await page.locator('.island-card[data-open="todo"]').click();
+  const first = page.locator(".todo-row").first();
+  const oldText = await first.locator(".todo-text").textContent();
+  await first.locator(".todo-text").click();
+  await expect(page.locator("#edit-todo-text")).toHaveValue(oldText);
+  await page.locator("#edit-todo-text").fill("先改了但取消");
+  await page.getByRole("button", { name: "取消編輯", exact: true }).click();
+  await expect(page.locator(".todo-text").first()).toHaveText(oldText);
+  await page.locator(".todo-text").first().click();
+  await page.locator("#edit-todo-text").fill("一起去野餐（已編輯）");
+  await page.locator("#edit-todo-date").fill("2026-11-02");
+  await page.locator("#edit-todo-time").fill("14:30");
+  await page.getByRole("button", { name: "儲存修改", exact: true }).click();
+  await expect(page.locator(".todo-row").first()).toContainText(
+    "一起去野餐（已編輯）",
+  );
+  await expect(
+    page.locator(".todo-row").first().getByRole("checkbox"),
+  ).not.toBeChecked();
+  await page.reload();
+  await page.locator('.island-card[data-open="todo"]').click();
+  await expect(page.locator(".todo-row").first().locator("time")).toHaveText(
+    "14:30",
+  );
+  await page.locator(".todo-text").first().click();
+  await page.locator("#edit-todo-time").fill("");
+  await page.getByRole("button", { name: "儲存修改", exact: true }).click();
+  await expect(page.locator(".todo-row").first().locator("time")).toHaveCount(
+    0,
+  );
+});
+
+test("reminder balloon opens due items regardless of creation age and disappears on completion", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-10-29T04:00:00Z"));
+  await page.evaluate(() => {
+    const now = new Date(),
+      next = new Date(now.getTime() + 3600000 * 23),
+      later = new Date(now.getTime() + 86400000 * 3);
+    const day = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const time = (d) =>
+      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    localStorage.setItem(
+      "little-island-v1",
+      JSON.stringify({
+        todos: [
+          {
+            id: "old",
+            text: "很早建立但今天要做",
+            date: day(now),
+            time: "",
+            done: false,
+            created: now.getTime() - 86400000 * 30,
+          },
+          {
+            id: "next",
+            text: "23小時後要做",
+            date: day(next),
+            time: time(next),
+            done: false,
+            created: now.getTime(),
+          },
+          {
+            id: "later",
+            text: "三天後再做",
+            date: day(later),
+            time: "",
+            done: false,
+            created: now.getTime(),
+          },
+        ],
+        notes: [],
+        memories: [],
+        residents: [],
+      }),
+    );
+  });
+  await page.reload();
+  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator("#reminder-count")).toHaveText("2");
+  await page.locator("#todo-reminder").click();
+  await expect(page.locator('[data-todo-scope="upcoming"]')).toHaveClass(
+    "active",
+  );
+  await expect(page.locator(".todo-text")).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "編輯 很早建立但今天要做", exact: true })
+    .click();
+  await page.locator("#edit-todo-date").fill("2026-11-05");
+  await page.getByRole("button", { name: "儲存修改", exact: true }).click();
+  await expect(page.locator("#reminder-count")).toHaveText("1");
+  await page
+    .locator(".todo-row")
+    .filter({ hasText: "23小時後要做" })
+    .getByRole("checkbox")
+    .check();
+  await expect(page.locator("#todo-reminder")).toBeHidden();
+  await page.reload();
+  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator("#todo-reminder")).toBeHidden();
+});
+
+test("calendar task text can be edited while the checkboxes remain independent", async ({
+  page,
+}) => {
+  await page.locator('.island-card[data-open="todo"]').click();
+  await page.getByRole("button", { name: "日曆", exact: true }).click();
+  await page.locator(".calendar-task-text").first().click();
+  await page.locator("#edit-todo-text").fill("從日曆編輯的待辦");
+  await page.getByRole("button", { name: "儲存修改", exact: true }).click();
+  await expect(
+    page
+      .locator(".calendar-task")
+      .filter({ hasText: "從日曆編輯的待辦" })
+      .getByRole("checkbox"),
+  ).not.toBeChecked();
 });

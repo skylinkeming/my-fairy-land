@@ -1,7 +1,12 @@
 import * as T from "three";
 import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-export function createWorld(container, onSelect, icon) {
+export function createWorld(
+  container,
+  onSelect,
+  icon,
+  onReminder = () => onSelect("todo"),
+) {
   const canvas = container.querySelector("canvas"),
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setClearColor(0xf8f8f0, 0);
@@ -881,6 +886,35 @@ export function createWorld(container, onSelect, icon) {
     );
     scene.add(r);
   }
+  // A quiet, warm balloon rises above the todo island only when work is due soon.
+  const todoIsland = defs.find((island) => island.id === "todo");
+  const todoBalloon = new T.Group();
+  todoBalloon.position.set(todoIsland.x - 2.8, 10.8, todoIsland.z + 1.2);
+  todoBalloon.visible = false;
+  scene.add(todoBalloon);
+  todoBalloon.name = "todo-reminder-balloon";
+  const balloonBody = ball(0.95, "#e9c36c", 0, 0, 0, todoBalloon, [1, 1.18, 1]);
+  const balloonParts = [balloonBody];
+  for (let i = 0; i < 4; i++) {
+    const panel = mesh(
+      new T.SphereGeometry(0.956, 8, 12, (i * Math.PI) / 2, 0.3),
+      "#f6df9b",
+      todoBalloon,
+    );
+    panel.scale.y = 1.18;
+    balloonParts.push(panel);
+  }
+  cyl(0.25, 0.22, 0.36, "#bb9970", 0, -1.65, 0, todoBalloon, 8);
+  for (const x of [-0.23, 0.23])
+    for (const z of [-0.18, 0.18])
+      cyl(0.014, 0.014, 0.7, "#ae9575", x, -1.19, z, todoBalloon, 5);
+  const exclamation = new T.Group();
+  exclamation.position.set(0.43, 0.05, 0.84);
+  todoBalloon.add(exclamation);
+  box(0.13, 0.48, 0.035, "#fff8da", 0, 0.12, 0, exclamation);
+  ball(0.075, "#fff8da", 0, -0.27, 0, exclamation, [1, 1, 0.3]);
+  const reminderButton = container.querySelector("#todo-reminder");
+  container.dataset.renderMode = "three";
   const labelDefs = [
     ["todo", "待辦事項島", "一步一步，慢慢來", -5.75, 1.9, 1.4],
     ["note", "記事本島", "留住想說的話", -2.88, 3.9, -5.05],
@@ -974,7 +1008,9 @@ export function createWorld(container, onSelect, icon) {
               ? -0.8 + Math.sin(activityTime * 1.7) * 0.25
               : 0;
           arm.rotation.z =
-            actor.state === "playing" ? Math.sin(activityTime * 4 + j) * 0.5 : 0;
+            actor.state === "playing"
+              ? Math.sin(activityTime * 4 + j) * 0.5
+              : 0;
         });
         if (!reduced && t < greetUntil && i === greetIndex && !seated) {
           r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.14;
@@ -1010,6 +1046,29 @@ export function createWorld(container, onSelect, icon) {
         ((reduced ? 0 : t) * 0.025 + marker.offset) % 1,
       );
       marker.glint.position.set(point.x, top + 0.08, point.z);
+    }
+    if (todoBalloon.visible) {
+      const balloonHeight = width < 600 ? 12.8 : 10.8;
+      todoBalloon.position.y = balloonHeight + (reduced ? 0 : Math.sin(t * 0.8) * 0.15);
+      todoBalloon.rotation.z = reduced ? 0 : Math.sin(t * 0.55) * 0.025;
+      exclamation.lookAt(camera.position);
+      const point = new T.Vector3(
+        todoBalloon.position.x,
+        balloonHeight - 2.1,
+        todoBalloon.position.z,
+      ).project(camera);
+      const half = reminderButton.offsetWidth / 2 + 8;
+      const x = T.MathUtils.clamp(
+        (point.x * 0.5 + 0.5) * width,
+        half,
+        width - half,
+      );
+      const y = T.MathUtils.clamp(
+        (-point.y * 0.5 + 0.5) * height,
+        135,
+        height - 60,
+      );
+      reminderButton.style.transform = `translate(-50%,0) translate(${x}px,${y}px)`;
     }
     for (const l of labels) {
       const p = l.point.clone().project(camera);
@@ -1048,7 +1107,13 @@ export function createWorld(container, onSelect, icon) {
       ),
       camera,
     );
-    const hit = ray.intersectObjects(selectable)[0];
+    const hit = ray.intersectObjects(
+      todoBalloon.visible ? [...selectable, ...balloonParts] : selectable,
+    )[0];
+    if (hit && balloonParts.includes(hit.object)) {
+      onReminder();
+      return;
+    }
     if (hit && hit.object.userData.id !== "home")
       onSelect(hit.object.userData.id);
   });
@@ -1073,12 +1138,16 @@ export function createWorld(container, onSelect, icon) {
       camera.updateProjectionMatrix();
     },
     focusIsland() {},
+    setTodoReminder(count) {
+      todoBalloon.visible = count > 0;
+    },
     getResidentActivities() {
       return life.descriptions();
     },
     watchResidents() {
       const actor = life.actors[0];
-      const target = life.mode === "wander" ? actor : { x: PARK.x, z: PARK.z + 1.5 };
+      const target =
+        life.mode === "wander" ? actor : { x: PARK.x, z: PARK.z + 1.5 };
       controls.target.set(target.x, 0.8, target.z);
       camera.zoom = 2.8;
       camera.updateProjectionMatrix();
