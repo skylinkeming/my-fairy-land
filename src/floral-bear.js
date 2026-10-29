@@ -37,12 +37,21 @@ export function createFloralBear(art) {
   }
   const texture = new T.CanvasTexture(canvas); texture.colorSpace=T.SRGBColorSpace;
   const body = art.ball(1,"#b7b5a9",0,.87,0,g,[.44,.69,.22]);
-  // Superellipsoid: rounded rectangular silhouette with no separate neck or muzzle.
+  // Taper the upper sides and slope the shoulders down into the arms.
+  const pillowPoint = (x, y, z) => {
+    const round = value => Math.sign(value) * Math.pow(Math.abs(value), .63);
+    const px = round(x), py = round(y), pz = round(z);
+    const shoulder = T.MathUtils.smoothstep(py, .05, .65);
+    return new T.Vector3(
+      px * (1 - .17 * Math.max(0, py)),
+      py - .13 * px * px * shoulder,
+      pz,
+    );
+  };
   const geometry=body.geometry.clone();const positions=geometry.attributes.position;
   for(let i=0;i<positions.count;i++) {
-    const shape=v=>Math.sign(v)*Math.pow(Math.abs(v),.63);
-    const y=shape(positions.getY(i));
-    positions.setXYZ(i,shape(positions.getX(i))*(1-.09*Math.max(0,y)),y,shape(positions.getZ(i)));
+    const point=pillowPoint(positions.getX(i),positions.getY(i),positions.getZ(i));
+    positions.setXYZ(i,point.x,point.y,point.z);
   }
   geometry.computeVertexNormals();body.geometry=geometry;
   const material=body.material.clone();material.color.set("#ffffff");material.map=texture;body.material=material;
@@ -51,8 +60,7 @@ export function createFloralBear(art) {
     const matrix=new T.Matrix4(),position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3();
     for(let i=0;i<fibers.count;i++) {
       fibers.getMatrixAt(i,matrix);matrix.decompose(position,rotation,scale);
-      const shape=v=>Math.sign(v)*Math.pow(Math.abs(v),.63);
-      const y=shape(position.y);position.set(shape(position.x)*(1-.09*Math.max(0,y)),y,shape(position.z));
+      position.copy(pillowPoint(position.x, position.y, position.z));
       matrix.compose(position,rotation,scale);fibers.setMatrixAt(i,matrix);
     }
     fibers.instanceMatrix.needsUpdate=true;
@@ -60,7 +68,7 @@ export function createFloralBear(art) {
   }
   for(const side of [-1,1]) art.ball(.16,"#b7b5a9",side*.3,1.54,0,g,[1,.92,.65]);
   const arms=[-1,1].map(side=>{
-    const arm=art.ball(.16,"#b7b5a9",side*.48,.66,0,g,[.82,2.15,.85]);
+    const arm=art.ball(.16,"#b7b5a9",side*.435,.595,0,g,[.72,2.05,.85]);
     arm.rotation.z=side*.15;
     return arm;
   });
