@@ -1,6 +1,6 @@
 import * as T from "three";
 
-// A soft, flattened pillow bear, modelled from the family's reference photograph.
+// A cuddly resident with the family bear's gray fur, botanical prints and stitched face.
 export function createFloralBear(art) {
   const g = new T.Group();
   g.name = "floral-bear";
@@ -36,51 +36,54 @@ export function createFloralBear(art) {
     c.fillRect(x,y,1,2);
   }
   const texture = new T.CanvasTexture(canvas); texture.colorSpace=T.SRGBColorSpace;
-  const body = art.ball(1,"#b7b5a9",0,.87,0,g,[.44,.69,.22]);
-  // Taper the upper sides and slope the shoulders down into the arms.
-  const pillowPoint = (x, y, z) => {
-    const round = value => Math.sign(value) * Math.pow(Math.abs(value), .63);
-    const px = round(x), py = round(y), pz = round(z);
-    const shoulder = T.MathUtils.smoothstep(py, .05, .65);
-    return new T.Vector3(
-      px * (1 - .17 * Math.max(0, py)),
-      py - .13 * px * px * shoulder,
-      pz,
-    );
-  };
-  const geometry=body.geometry.clone();const positions=geometry.attributes.position;
-  for(let i=0;i<positions.count;i++) {
-    const point=pillowPoint(positions.getX(i),positions.getY(i),positions.getZ(i));
-    positions.setXYZ(i,point.x,point.y,point.z);
+  const printedMaterials = [];
+  function printedBall(radius, x, y, z, scale) {
+    const part = art.ball(radius, "#b7b5a9", x, y, z, g, scale);
+    const material = part.material.clone();
+    material.color.set("#ffffff");
+    material.map = texture;
+    part.material = material;
+    printedMaterials.push(material);
+    return part;
   }
-  geometry.computeVertexNormals();body.geometry=geometry;
-  const material=body.material.clone();material.color.set("#ffffff");material.map=texture;body.material=material;
-  // Surface pile follows the same pillow silhouette.
-  for(const fibers of body.children) if(fibers.isInstancedMesh) {
-    const matrix=new T.Matrix4(),position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3();
-    for(let i=0;i<fibers.count;i++) {
-      fibers.getMatrixAt(i,matrix);matrix.decompose(position,rotation,scale);
-      position.copy(pillowPoint(position.x, position.y, position.z));
-      matrix.compose(position,rotation,scale);fibers.setMatrixAt(i,matrix);
-    }
-    fibers.instanceMatrix.needsUpdate=true;
-    fibers.computeBoundingSphere();
+  // Match the other residents' big round heads and compact, cuddly limbs.
+  printedBall(.32, 0, .43, 0, [1, 1.2, .8]);
+  printedBall(.445, 0, 1.02, .025, [1, .9, .9]);
+  for (const side of [-1, 1]) {
+    art.ball(.14, "#b7b5a9", side * .31, 1.3, 0, g, [1, 1, .8]);
+    art.ball(.078, "#a6a498", side * .31, 1.3, .09, g, [1, 1, .4], "fabric");
   }
-  for(const side of [-1,1]) art.ball(.16,"#b7b5a9",side*.3,1.54,0,g,[1,.92,.65]);
-  const arms=[-1,1].map(side=>{
-    const arm=art.ball(.16,"#b7b5a9",side*.435,.595,0,g,[.72,2.05,.85]);
-    arm.rotation.z=side*.15;
-    return arm;
-  });
-  const feet=[-1,1].map(side=>art.ball(.19,"#b7b5a9",side*.235,.13,0,g,[1,1.25,.95]));
-  for(const side of [-1,1]) art.ball(.039,"#252729",side*.165,1.29,.219,g,[1,1,.22],"fabric");
-  const noseShape=new T.Shape();noseShape.moveTo(-.05,0);noseShape.quadraticCurveTo(0,.012,.05,0);noseShape.quadraticCurveTo(.035,-.04,0,-.065);noseShape.quadraticCurveTo(-.035,-.04,-.05,0);
-  const nose=new T.Mesh(new T.ShapeGeometry(noseShape),new T.MeshStandardMaterial({color:"#252729",roughness:1,side:T.DoubleSide}));
-  nose.position.set(0,1.19,.227);g.add(nose);
-  const mouthMaterial=new T.MeshStandardMaterial({color:"#292b2b",roughness:1});
-  for(const points of [ [[0,1.13,.228],[0,1.045,.229]], [[0,1.045,.229],[-.075,.98,.228]], [[0,1.045,.229],[.075,.98,.228]] ]) {
-    const curve=new T.LineCurve3(...points.map(point=>new T.Vector3(...point)));
-    g.add(new T.Mesh(new T.TubeGeometry(curve,1,.008,8,false),mouthMaterial));
+  const arms = [-1, 1].map(side =>
+    printedBall(.12, side * .34, .52, 0, [.85, 1.5, .85]),
+  );
+  const feet = [-1, 1].map(side =>
+    printedBall(.135, side * .18, .1, .08, [1, .7, 1.4]),
+  );
+  for (const side of [-1, 1]) {
+    art.ball(.036, "#252729", side * .145, 1.08, .405, g, [1, 1.1, .5], "fabric");
+    art.ball(.008, "#fff8e9", side * .145 - .009, 1.091, .421, g, [1, 1, .4], "smooth");
   }
-  return {g,arms,feet,dispose(){texture.dispose();material.dispose();geometry.dispose();mouthMaterial.dispose();nose.material.dispose();}};
+  // Keep the reference bear's small triangular nose and upside-down Y stitching.
+  const noseShape = new T.Shape();
+  noseShape.moveTo(-.042, 0);
+  noseShape.quadraticCurveTo(0, .01, .042, 0);
+  noseShape.quadraticCurveTo(.03, -.032, 0, -.05);
+  noseShape.quadraticCurveTo(-.03, -.032, -.042, 0);
+  const stitchMaterial = new T.MeshStandardMaterial({color: "#292b2b", roughness: 1, side: T.DoubleSide});
+  const nose = new T.Mesh(new T.ShapeGeometry(noseShape), stitchMaterial);
+  nose.position.set(0, 1.015, .429);
+  g.add(nose);
+  for (const points of [
+    [[0, .966, .426], [0, .925, .42]],
+    [[0, .925, .42], [-.047, .888, .401]],
+    [[0, .925, .42], [.047, .888, .401]],
+  ]) {
+    const curve = new T.LineCurve3(...points.map(point => new T.Vector3(...point)));
+    g.add(new T.Mesh(new T.TubeGeometry(curve, 1, .006, 8, false), stitchMaterial));
+  }
+  return {g, arms, feet, dispose() {
+    texture.dispose();
+    for (const material of printedMaterials) material.dispose();
+    stitchMaterial.dispose();
+  }};
 }

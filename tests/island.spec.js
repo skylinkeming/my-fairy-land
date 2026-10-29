@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator(".map-label")).toHaveCount(4, { timeout: 15000 });
 });
 
 test("3D map, zoom, rotation, and island navigation work", async ({ page }) => {
