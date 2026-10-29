@@ -518,7 +518,7 @@ function plushSVG(r) {
 function renderFriends() {
   const activities = world?.getResidentActivities?.() || [];
   document.querySelector("#panel-content").innerHTML =
-    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>${state.residents.length} 位小夥伴會跨島散步、在公園盪鞦韆或一起玩耍。點選娃娃，立刻拉近看看牠；也可以打個招呼。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card" data-resident="${i}"><button class="resident-art resident-${i}" data-watch-resident="${i}" aria-label="放大查看${esc(r.name)}" ${world ? "" : "disabled"}>${plushSVG(r)}<span class="resident-view-hint">放大看看 ↗</span></button><span class="resident-status"><i></i> ${esc(activities[i]?.label || "在島上休息")}</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
+    `<div class="friends-intro"><span>☀</span><div><h3>今天，也一起悠閒地生活</h3><p>${state.residents.length} 位小夥伴各有自己的日常：兩兩散步、坐在公園椅子上聊天、獨自在樹林發呆，也會盪鞦韆和玩球。點選娃娃，立刻拉近看看牠；也可以打個招呼。</p></div></div><div class="residents">${state.residents.map((r, i) => `<article class="resident-card" data-resident="${i}"><button class="resident-art resident-${i}" data-watch-resident="${i}" aria-label="放大查看${esc(r.name)}" ${world ? "" : "disabled"}>${plushSVG(r)}<span class="resident-view-hint">放大看看 ↗</span></button><span class="resident-status"><i></i> ${esc(activities[i]?.label || "在島上休息")}</span><h3>${esc(r.name)}</h3><p>${esc(r.role)}</p><button class="secondary-button" data-greet="${i}">打個招呼 ${icon("heart")}</button></article>`).join("")}</div><div class="soft-notice">${icon("heart")} 這裡的每一位居民，都在等你回家。</div>`;
   document.querySelectorAll("[data-resident]").forEach((card) => {
     card.onclick = (event) => {
       if (!world || event.target.closest("[data-greet]")) return;
@@ -761,6 +761,15 @@ async function loadWorld() {
 document.querySelector("#todo-reminder").onclick = () =>
   openPanel("todo", { upcoming: true });
 setInterval(updateTodoReminder, 60000);
+setInterval(() => {
+  const activities = world?.getResidentActivities?.();
+  if (!activities) return;
+  document.querySelectorAll(".resident-card[data-resident]").forEach(card => {
+    const status = card.querySelector(".resident-status");
+    const activity = activities[Number(card.dataset.resident)];
+    if (status?.lastChild && activity) status.lastChild.textContent = ` ${activity.label}`;
+  });
+}, 1000);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) updateTodoReminder();
 });

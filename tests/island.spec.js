@@ -379,8 +379,27 @@ test("resident activities differ after refresh and the watch button brings them 
   await page.locator(".label-friends").click();
   await expect(page.locator(".resident-status")).toHaveCount(6);
   await expect(page.locator(".resident-status").first()).toContainText(
-    /散步|風景|鞦韆|玩球/,
+    /散步|風景|鞦韆|玩球|聊天|發呆|放空/,
   );
+});
+
+test("mixed resident activities show walking companions, seated chat and forest solitude", async ({ page }) => {
+  await page.addInitScript(() => {
+    Math.random = () => .1;
+    sessionStorage.removeItem("little-island-last-activity");
+  });
+  await page.reload();
+  await expect(page.locator("#world")).toHaveAttribute("data-resident-activity", "wander");
+  await page.locator('[data-open="friends"]').first().click();
+  const statuses = page.locator(".resident-status");
+  await expect(statuses.filter({hasText: "和朋友兩兩散步中"})).toHaveCount(2);
+  await expect(statuses.filter({hasText: "坐在公園椅子上聊天"})).toHaveCount(2);
+  await expect(statuses.filter({hasText: "獨自在樹林裡發呆"})).toHaveCount(1);
+  const chatting = page.locator(".resident-card").filter({hasText: "坐在公園椅子上聊天"}).first();
+  const index = await chatting.getAttribute("data-resident");
+  await chatting.locator("[data-watch-resident]").click();
+  await expect(page.locator("#world")).toHaveAttribute("data-focused-resident", index);
+  await expect(page.locator("#modal")).toBeHidden();
 });
 
 test("calendar completed deletion only removes items in the displayed month", async ({

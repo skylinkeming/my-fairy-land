@@ -297,19 +297,20 @@ export function createWorld(
       box(w * 0.48, h * 1.05, d * 0.7, color, w * 0.58, h * 0.525, -0.1, group);
     }
   }
-  function bench(x, z, p, rot = 0) {
+  function bench(x, z, p, rot = 0, width = 1.1) {
     const g = new T.Group();
     p.add(g);
     g.position.set(x, top, z);
     g.rotation.y = rot;
     for (let i = 0; i < 3; i++)
-      box(1.1, 0.075, 0.11, "#b28d63", 0, 0.4, i * 0.13, g);
+      box(width, 0.075, 0.11, "#b28d63", 0, 0.4, i * 0.13, g);
     for (const y of [0.73, 0.9])
-      box(1.1, 0.12, 0.08, "#b28d63", 0, y, -0.05, g);
-    for (const a of [-0.4, 0.4]) {
+      box(width, 0.12, 0.08, "#b28d63", 0, y, -0.05, g);
+    for (const a of [-width * .36, width * .36]) {
       box(0.08, 0.45, 0.08, "#788371", a, 0.2, 0.12, g);
       box(0.06, 0.8, 0.06, "#788371", a, 0.5, -0.05, g);
     }
+    return g;
   }
   function lamp(x, z, p) {
     cyl(0.035, 0.06, 1.55, "#7b8370", x, top + 0.77, z, p, 8);
@@ -676,10 +677,15 @@ export function createWorld(
     tree(x, z, 0.85, garden);
   for (const [x, z, r] of [
     [-2, 2.2, 0.1],
-    [2.8, -1.4, -0.3],
     [-4.5, 1.4, 1.1],
   ])
     bench(x, z, garden, r);
+  // Shared coordinates keep the two seated residents aligned with a full-size bench.
+  const chatBench = bench(PARK.chatBench.x, PARK.chatBench.z, garden,
+    PARK.chatBench.heading, PARK.chatBench.width);
+  chatBench.name = "resident-chat-bench";
+  curvedPath([[PARK.stroll.x, PARK.stroll.far], [PARK.stroll.x, PARK.stroll.near]], garden, 1.9);
+  for (const [x, z] of [[-4.8, -3.3], [-3.1, -2.8], [-4.6, -1.5]]) tree(x, z, .75, garden);
   flowers(-2, 3.9, garden, "#e7b6b3", 8);
   flowers(3.9, 1.9, garden, "#f7e8ad", 8);
   lamp(-1.3, 2.3, garden);
@@ -1023,26 +1029,29 @@ export function createWorld(
         }
         r.g.position.set(actor.x, top + actor.yOffset + bridgeLift, actor.z);
         r.g.rotation.set(0, actor.heading, 0);
-        const seated = actor.state === "swinging";
+        const seated = actor.state === "swinging" || actor.state === "chatting";
+        const walking = actor.state === "walking" || actor.state === "strolling";
         r.feet.forEach((foot, j) => {
           foot.position.y = seated ? 0.23 : (foot.userData.restY ?? 0.1);
           foot.position.z = seated
             ? 0.3
             : (foot.userData.restZ ?? 0.08) +
-              (actor.state === "walking"
+              (walking
                 ? Math.sin(actor.walkTime * 8 + j * Math.PI) * 0.09
                 : 0);
         });
         r.arms.forEach((arm, j) => {
           arm.rotation.x = seated
-            ? -1.1
+            ? (actor.state === "chatting" ? -.35 : -1.1)
             : actor.state === "pushing"
               ? -0.8 + Math.sin(activityTime * 1.7) * 0.25
               : 0;
           arm.rotation.z =
             actor.state === "playing"
               ? Math.sin(activityTime * 4 + j) * 0.5
-              : 0;
+              : actor.state === "chatting"
+                ? Math.sin(activityTime * 1.4 + actor.phase + j) * .12
+                : 0;
         });
         if (!reduced && t < greetUntil && i === greetIndex && !seated) {
           r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.14;

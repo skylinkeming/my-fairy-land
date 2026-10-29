@@ -78,7 +78,7 @@ test("walking residents move continuously and actually arrive on another island"
     "at least one resident must finish crossing to another island",
   );
 });
-test("two residents ride the swings together while four friends join them", () => {
+test("two residents ride the swings while others chat, daydream and wander", () => {
   const life = createResidentLife({
     nodes,
     links,
@@ -91,7 +91,9 @@ test("two residents ride the swings together while four friends join them", () =
   life.update(0.5);
   const riders = life.actors.filter((a) => a.state === "swinging");
   assert.equal(riders.length, 2);
-  assert.equal(life.actors.filter((a) => a.state === "pushing").length, 4);
+  assert.equal(life.actors.filter((a) => a.state === "chatting").length, 2);
+  assert.equal(life.actors.filter((a) => a.state === "daydreaming").length, 1);
+  assert.equal(life.actors.filter((a) => a.state === "walking").length, 1);
   for (const rider of riders) {
     assert.notEqual(rider.swingAngle, 0);
     assert.ok(rider.yOffset > 0);
@@ -111,7 +113,9 @@ test("playing residents move together on the park lawn instead of staying fixed"
   assert.equal(life.mode, "play");
   const before = life.actors.map((a) => ({ x: a.x, z: a.z }));
   life.update(0.8);
+  assert.equal(life.actors.filter(a => a.state === "playing").length, 2);
   for (const [i, a] of life.actors.entries()) {
+    if (a.activity !== "play") continue;
     assert.equal(a.state, "playing");
     assert.ok(Math.hypot(a.x - before[i].x, a.z - before[i].z) > 0.1);
     assert.ok(
@@ -123,11 +127,53 @@ test("playing residents move together on the park lawn instead of staying fixed"
   }
 });
 
+test("a mixed day has a walking pair, a seated chatting pair and a solitary forest resident", () => {
+  const life = createResidentLife({nodes, links, random: () => .1});
+  life.update(0);
+  const pair = life.actors.filter(actor => actor.state === "strolling");
+  const seated = life.actors.filter(actor => actor.state === "chatting");
+  const solitary = life.actors.filter(actor => actor.state === "daydreaming");
+  assert.equal(pair.length, 2);
+  assert.equal(seated.length, 2);
+  assert.equal(solitary.length, 1);
+  assert.equal(pair[0].partner, pair[1].id);
+  assert.equal(seated[0].partner, seated[1].id);
+  assert.equal(solitary[0].partner, null);
+  assert.equal(solitary[0].x, PARK.x + PARK.forest.x);
+  assert.equal(solitary[0].z, PARK.z + PARK.forest.z);
+  // Keep the unrelated cross-island passerby outside this pair-coordination case;
+  // encounters with strangers are covered by the turn-apart and crowd tests.
+  const passerby = life.actors.find(actor => actor.activity === "wander");
+  Object.assign(passerby, {x: 4, z: 1, node: "home", state: "waiting", wait: 100});
+  assert.ok(Math.abs(Math.hypot(seated[0].x - seated[1].x, seated[0].z - seated[1].z) - 1.4) < 1e-6);
+  const seats = seated.map(actor => ({x: actor.x, z: actor.z}));
+  let near = false, far = false;
+  for (let i = 0; i < 200; i++) {
+    life.update(.1);
+    assert.ok(Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z) >= 1.18);
+    assert.ok(Math.abs(pair[0].z - pair[1].z) < .1, "companions walk alongside and wait for each other");
+    assert.ok(pair.every(actor => !actor.detour), "companions do not randomly flee each other");
+    for (const [j, actor] of seated.entries()) {
+      assert.equal(actor.x, seats[j].x);
+      assert.equal(actor.z, seats[j].z);
+      assert.ok(actor.yOffset > 0, "sit on the raised bench rather than on the ground");
+    }
+    if (pair.every(actor => Math.abs(actor.z - PARK.z - PARK.stroll.near) < .1)) near = true;
+    if (pair.every(actor => Math.abs(actor.z - PARK.z - PARK.stroll.far) < .1)) far = true;
+  }
+  assert.ok(near && far, "the pair must finish both legs of the walk");
+  const roles = life.actors.map(actor => actor.activity);
+  life.update(37);
+  assert.notEqual(life.mode, "wander");
+  assert.ok(life.actors.some((actor, i) => actor.activity !== roles[i]), "roles rotate over time");
+  assert.ok(life.descriptions().every(description => typeof description.label === "string"));
+});
+
 test("head-on walkers pass without overlapping or teleporting", () => {
   const life = createResidentLife({nodes,links,random:()=>.1,count:2});
   for (const [i,actor] of life.actors.entries()) {
     actor.x = i ? 2 : -2; actor.z = 2;
-    actor.state = "walking"; actor.goalMode = "wander";
+    actor.state = "walking"; actor.goalMode = "wander"; actor.activity = "wander"; actor.partner = null;
     actor.route = [{x:actor.x,z:2},{x:-actor.x,z:2}]; actor.routeIndex=1;
     actor.target = {node:"home",point:actor.route[1],state:"waiting"};
   }
@@ -147,7 +193,7 @@ test("nearby approaching walkers randomly turn apart before touching", () => {
     const life = createResidentLife({nodes, links, random: () => draw, count: 2});
     for (const [i, actor] of life.actors.entries()) {
       actor.x = i ? .9 : -.9; actor.z = 2;
-      actor.node = "home"; actor.state = "walking"; actor.goalMode = life.mode;
+      actor.node = "home"; actor.state = "walking"; actor.goalMode = life.mode; actor.activity = "wander"; actor.partner = null;
       actor.route = [{x: actor.x, z: 2}, {x: i ? -3 : 3, z: 2}];
       actor.routeIndex = 1;
       actor.target = {node: "home", point: actor.route[1], state: "waiting"};
@@ -175,7 +221,7 @@ test("walking dolls stay separated through crowded activity transitions", () => 
       life.update(.05);
       for(let i=0;i<life.actors.length;i++) for(let j=i+1;j<life.actors.length;j++) {
         const a=life.actors[i],b=life.actors[j];
-        if(a.state!=="walking" && b.state!=="walking") continue;
+        if(![a.state,b.state].some(state => ["walking", "strolling"].includes(state))) continue;
         assert.ok(Math.hypot(a.x-b.x,a.z-b.z)>=1.18-1e-5,`seed ${seed}, frame ${frame}: ${a.id}/${b.id} overlap`);
       }
     }
@@ -186,7 +232,8 @@ test("opposite walkers take turns on a narrow bridge and both finish crossing", 
   const life=createResidentLife({nodes,links,random:()=>.1,count:2});
   const [a,b]=life.actors;
   for(const [actor,start,end,node] of [[a,-3,-10.8,"todo"],[b,-10.8,-3,"home"]]) {
-    actor.x=start;actor.z=0;actor.state="walking";actor.goalMode="wander";
+    actor.x=start;actor.z=0;actor.state="walking";actor.goalMode="wander";actor.activity="wander";actor.partner=null;
+    actor.node = node === "todo" ? "home" : "todo";
     actor.route=[{x:start,z:0},{x:end,z:0}];actor.routeIndex=1;
     actor.target={node,point:{x:end,z:0},state:"waiting"};
   }
