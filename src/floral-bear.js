@@ -4,7 +4,8 @@ import * as T from "three";
 export function createFloralBear(art) {
   const g = new T.Group();
   g.name = "floral-bear";
-  g.scale.setScalar(.85);
+  // Plump the whole pillow silhouette, keeping the face and prints aligned.
+  g.scale.set(.85 * 1.18, .85, .85 * 1.18);
   const canvas = document.createElement("canvas");
   canvas.width = 1024; canvas.height = 512;
   const c = canvas.getContext("2d");
