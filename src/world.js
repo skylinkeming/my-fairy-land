@@ -1,4 +1,11 @@
 import * as T from "three";
+import {
+  BOARD_THEMES,
+  styleTerrain,
+  terrainTexture,
+  woodMaterial,
+  decorateBoardTile,
+} from "./board-art.js";
 import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 export function createWorld(
@@ -14,6 +21,8 @@ export function createWorld(
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   renderer.outputColorSpace = T.SRGBColorSpace;
+  renderer.toneMapping = T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
   const scene = new T.Scene(),
     camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 120);
   camera.position.set(42, 53, 65);
@@ -32,8 +41,8 @@ export function createWorld(
   controls.rotateSpeed = 0.55;
   controls.update();
   controls.saveState();
-  scene.add(new T.AmbientLight(0xfff9e9, 2.3));
-  const sun = new T.DirectionalLight(0xfff4df, 3.2);
+  scene.add(new T.AmbientLight(0xfff2d6, 1.55));
+  const sun = new T.DirectionalLight(0xfff0d2, 2.5);
   sun.position.set(-25, 55, 32);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -51,7 +60,14 @@ export function createWorld(
   const mats = new Map();
   function mat(c) {
     if (!mats.has(c))
-      mats.set(c, new T.MeshStandardMaterial({ color: c, roughness: 1 }));
+      mats.set(
+        c,
+        new T.MeshStandardMaterial({
+          color: c,
+          roughness: 1,
+          flatShading: true,
+        }),
+      );
     return mats.get(c);
   }
   function mesh(geo, c, p = scene) {
@@ -89,20 +105,23 @@ export function createWorld(
     groups = {},
     selectable = [];
   defs.forEach((d) => {
-    d.x *= landScale;
-    d.z *= landScale;
+    d.x *= landScale * 0.9;
+    d.z *= landScale * 0.9;
     const g = new T.Group();
     g.position.set(d.x, 0, d.z);
     scene.add(g);
     groups[d.id] = g;
+    g.userData.playerColor = BOARD_THEMES[d.id].piece;
     for (const [r, b, h, c, y] of [
       [2.95, 2.65, 1.18, "#c8ae80", -0.12],
       [3.04, 2.95, 0.23, "#efdeb1", 0.38],
       [2.93, 3.02, 0.22, d.c, 0.56],
     ]) {
       const m = cyl(r * landScale, b * landScale, h, c, 0, y, 0, g, 6);
-      m.rotation.y = Math.PI / 6;
+      m.rotation.y = 0;
+      if (y === -0.12) m.material = woodMaterial();
       if (y === 0.56) {
+        styleTerrain(m, BOARD_THEMES[d.id].terrain);
         m.userData.id = d.id;
         selectable.push(m);
       }
@@ -120,25 +139,31 @@ export function createWorld(
       );
     }
   });
-  for (let i = 3; i >= 0; i--) {
-    const w = new T.Mesh(
-      new T.CircleGeometry((12.3 + i * 0.8) * landScale, 64),
-      new T.MeshBasicMaterial({
-        color: ["#aecfbe", "#c2d9c5", "#d9e4d0", "#ebeedf"][i],
-        transparent: true,
-        opacity: 0.63,
-      }),
-    );
-    w.rotation.x = -Math.PI / 2;
-    w.position.set(0, -0.83 - i * 0.01, -0.6);
-    scene.add(w);
+  // A blue maritime board with a layered timber frame replaces the soft lagoon.
+  for (const [radius, y, height, color] of [
+    [32.4, -1.12, 0.45, "#68462e"],
+    [31.9, -0.88, 0.1, "#c5a56c"],
+    [31.3, -0.81, 0.06, "#347387"],
+  ]) {
+    const board = cyl(radius, radius, height, color, 0, y, 1, scene, 6);
+    board.rotation.y = 0;
+    if (radius === 31.3)
+      board.material = [
+        mat("#28566b"),
+        new T.MeshStandardMaterial({
+          map: terrainTexture("sea"),
+          roughness: 1,
+        }),
+        mat("#28566b"),
+      ];
+    if (radius === 32.4) board.material = woodMaterial();
   }
   const shadow = new T.Mesh(
     new T.PlaneGeometry(140, 140),
     new T.ShadowMaterial({ opacity: 0.12 }),
   );
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = -0.88;
+  shadow.position.y = -1.38;
   shadow.receiveShadow = true;
   scene.add(shadow);
   function tree(x, z, s, p, type = 0) {
@@ -153,7 +178,7 @@ export function createWorld(
           0,
           0.85 - i * 0.17,
           1.25 - i * 0.13,
-          ["#72976b", "#86a778", "#9bb683"][i],
+          ["#35563c", "#426749", "#6c8550"][i],
           0,
           1.35 + i * 0.53,
           0,
@@ -161,9 +186,11 @@ export function createWorld(
           7,
         );
     } else {
-      ball(0.95, "#86a86e", 0, 1.65, 0, g, [1, 1.12, 1]);
-      ball(0.72, "#a0ba7d", -0.35, 2.05, 0.06, g);
-      ball(0.67, "#93af74", 0.38, 2.05, -0.1, g);
+      const crown = mesh(new T.DodecahedronGeometry(0.95, 0), "#426447", g);
+      crown.position.set(0, 1.8, 0);
+      crown.scale.y = 1.2;
+      const upper = mesh(new T.DodecahedronGeometry(0.62, 0), "#58794c", g);
+      upper.position.set(-0.3, 2.3, 0);
       if (type === 2)
         for (let i = 0; i < 5; i++) {
           let a = i * 2.4;
@@ -210,99 +237,55 @@ export function createWorld(
     g.rotation.y = rot;
     p.add(g);
     for (let i = 0; i <= n; i++) {
-      box(0.1, 0.63, 0.1, "#f1e7cc", i * 0.5, 0.31, 0, g);
-      ball(0.07, "#f5ecd7", i * 0.5, 0.65, 0, g);
+      box(0.1, 0.63, 0.1, "#b59a70", i * 0.5, 0.31, 0, g);
+      ball(0.07, "#ccb48b", i * 0.5, 0.65, 0, g);
     }
     for (const h of [0.2, 0.43])
-      box(n * 0.5, 0.08, 0.07, "#f1e7cc", n * 0.25, h, 0, g);
+      box(n * 0.5, 0.08, 0.07, "#b59a70", n * 0.25, h, 0, g);
   }
   function path(x, z, w, d, p) {
-    box(w, 0.035, d, "#e7d6ae", x, top + 0.01, z, p);
+    box(w, 0.035, d, "#c9ad77", x, top + 0.01, z, p);
   }
-  function house(
-    p,
-    {
-      x = 0,
-      z = 0,
-      w = 2.2,
-      h = 1.7,
-      d = 1.7,
-      wall = "#f4e5bc",
-      roof = "#b97959",
-      shop = false,
-    } = {},
-  ) {
-    const g = new T.Group();
-    g.position.set(x, top, z);
-    p.add(g);
-    box(w, h, d, wall, 0, h / 2, 0, g);
-    box(w + 0.18, 0.16, d + 0.12, "#e4d2a4", 0, 0.06, 0, g);
-    const sh = new T.Shape();
-    sh.moveTo(-w / 2 - 0.2, 0);
-    sh.lineTo(0, 0.92);
-    sh.lineTo(w / 2 + 0.2, 0);
-    sh.closePath();
-    const r = mesh(
-      new T.ExtrudeGeometry(sh, { depth: d + 0.4, bevelEnabled: false }),
-      roof,
-      g,
+  function house(parent, { x = 0, z = 0, w = 2.2, h = 1.7, d = 1.7 } = {}) {
+    const group = new T.Group();
+    group.position.set(x, top, z);
+    parent.add(group);
+    const color = parent.userData.playerColor || "#a64331";
+    const body = box(w, h * 0.75, d, color, 0, h * 0.375, 0, group);
+    const shape = new T.Shape();
+    shape.moveTo(-w / 2 - 0.04, 0);
+    shape.lineTo(0, h * 0.55);
+    shape.lineTo(w / 2 + 0.04, 0);
+    shape.closePath();
+    const roof = mesh(
+      new T.ExtrudeGeometry(shape, { depth: d + 0.08, bevelEnabled: false }),
+      color,
+      group,
     );
-    r.position.set(0, h, -d / 2 - 0.2);
-    box(0.65, 1.12, 0.08, "#9a7758", 0, 0.56, d / 2 + 0.05, g);
-    box(0.45, 0.77, 0.025, "#adcaac", 0, 0.69, d / 2 + 0.1, g);
-    box(0.55, 0.09, 0.1, "#f2e0b7", 0, 0.7, d / 2 + 0.14, g);
-    ball(0.045, "#d6ae64", 0.19, 0.57, d / 2 + 0.15, g);
-    for (const s of [-1, 1]) {
-      box(0.52, 0.61, 0.1, "#e4cf9b", s * w * 0.33, h * 0.62, d / 2 + 0.06, g);
-      box(0.38, 0.46, 0.12, "#a3c4bb", s * w * 0.33, h * 0.62, d / 2 + 0.07, g);
-      box(
-        0.025,
-        0.46,
-        0.13,
-        "#fff2ce",
-        s * w * 0.33,
-        h * 0.62,
-        d / 2 + 0.08,
-        g,
+    roof.position.set(0, h * 0.75, -d / 2 - 0.04);
+    for (const piece of [body, roof]) {
+      const edge = new T.LineSegments(
+        new T.EdgesGeometry(piece.geometry),
+        new T.LineBasicMaterial({
+          color: new T.Color(color).multiplyScalar(0.65),
+          transparent: true,
+          opacity: 0.4,
+        }),
       );
-      box(0.4, 0.025, 0.13, "#fff2ce", s * w * 0.33, h * 0.62, d / 2 + 0.08, g);
-      box(0.66, 0.13, 0.22, "#b37f5c", s * w * 0.33, h * 0.4, d / 2 + 0.1, g);
-      for (let f = 0; f < 3; f++) {
-        ball(
-          0.09,
-          "#8da66c",
-          s * w * 0.33 - 0.21 + f * 0.21,
-          h * 0.45,
-          d / 2 + 0.15,
-          g,
-        );
-        ball(
-          0.055,
-          "#e7b2a2",
-          s * w * 0.33 - 0.21 + f * 0.21,
-          h * 0.5,
-          d / 2 + 0.19,
-          g,
-        );
-      }
+      piece.add(edge);
     }
-    box(0.34, 0.75, 0.4, "#ead5ad", w * 0.29, h + 0.48, -d * 0.17, g);
-    box(0.44, 0.1, 0.5, roof, w * 0.29, h + 0.86, -d * 0.17, g);
-    box(0.88, 0.11, 0.34, "#e8dac0", 0, 0.05, d / 2 + 0.23, g);
-    if (shop) {
-      const aw = box(
-        w + 0.12,
-        0.12,
-        0.65,
-        "#f0d5a6",
-        0,
-        h * 0.7,
-        d / 2 + 0.3,
-        g,
-      );
-      aw.rotation.x = 0.12;
-      for (let i = 0; i < 6; i++)
-        box(w / 12, 0.13, 0.64, "#b58d72", -w / 2 + (i * w) / 6, 0, 0, aw);
+    box(
+      w * 0.19,
+      h * 0.34,
+      0.025,
+      new T.Color(color).multiplyScalar(0.65).getStyle(),
+      0,
+      h * 0.17,
+      d / 2 + 0.018,
+      group,
+    );
+    if (parent === groups.home) {
+      box(w * 0.48, h * 1.05, d * 0.7, color, w * 0.58, h * 0.525, -0.1, group);
     }
   }
   function bench(x, z, p, rot = 0) {
@@ -433,7 +416,8 @@ export function createWorld(
     [2, 3],
   ].forEach(([a, b]) => bridge(defs[a], defs[b]));
   const garden = new T.Group();
-  garden.position.set(0, 0, 13.8);
+  garden.position.set(0, 0, PARK.z);
+  garden.userData.playerColor = BOARD_THEMES.park.piece;
   garden.name = "riverside-park";
   scene.add(garden);
   for (const [radius, bottom, height, color, y] of [
@@ -442,9 +426,11 @@ export function createWorld(
     [7.03, 7.25, 0.22, "#b4c991", 0.56],
   ]) {
     const terrain = cyl(radius, bottom, height, color, 0, y, 0, garden, 6);
-    terrain.rotation.y = Math.PI / 6;
+    terrain.rotation.y = 0;
+    if (y === -0.12) terrain.material = woodMaterial();
+    if (y === 0.56) styleTerrain(terrain, "pasture");
   }
-  bridge(defs[0], { x: 0, z: 13.8 });
+  bridge(defs[0], { x: 0, z: PARK.z });
   for (let i = 0; i < 12; i++)
     box(1.4, 0.12, 0.24, "#c4a579", 14.8, -0.12, 7 + i * 0.25);
   for (const x of [14.15, 15.45])
@@ -533,13 +519,13 @@ export function createWorld(
     return curve;
   }
   function hill(x, z, s, parent) {
-    const mound = ball(1, "#9dbb80", x, top - 0.1, z, parent, [
+    const mound = ball(1, "#858b53", x, top - 0.1, z, parent, [
       s,
       s * 0.65,
       s * 0.82,
     ]);
     mound.name = "grassy-hill";
-    ball(1, "#b4cb91", x - s * 0.5, top - 0.12, z + s * 0.2, parent, [
+    ball(1, "#a1a267", x - s * 0.5, top - 0.12, z + s * 0.2, parent, [
       s * 0.7,
       s * 0.4,
       s * 0.67,
@@ -706,6 +692,10 @@ export function createWorld(
     );
   }
   cyl(0, 1.25, 0.85, "#ba8c70", -3.8, top + 2.05, 2.7, garden, 6);
+  for (const [id, group] of Object.entries({ ...groups, park: garden })) {
+    decorateBoardTile(group, BOARD_THEMES[id], { box, ball, cyl, mesh, top });
+  }
+  container.dataset.artStyle = "catan-inspired";
   container.dataset.landAreaMultiplier = String(landScale ** 2);
   container.dataset.scenery = "park hills river";
   // Two real pendulum rigs; seated residents follow the same pivots as the seats.
@@ -927,7 +917,10 @@ export function createWorld(
     el.innerHTML = `<span class="label-symbol">${icon(id)}</span><span><strong>${title}</strong><small>${sub}</small></span><span class="label-arrow">↗</span>`;
     el.onclick = () => onSelect(id);
     container.querySelector("#world-labels").append(el);
-    return { el, point: new T.Vector3(x * landScale, y + 1, z * landScale) };
+    return {
+      el,
+      point: new T.Vector3(x * landScale * 0.9, y + 1, z * landScale * 0.9),
+    };
   });
   const hl = document.createElement("div");
   hl.className = "home-label";
@@ -1049,7 +1042,8 @@ export function createWorld(
     }
     if (todoBalloon.visible) {
       const balloonHeight = width < 600 ? 12.8 : 10.8;
-      todoBalloon.position.y = balloonHeight + (reduced ? 0 : Math.sin(t * 0.8) * 0.15);
+      todoBalloon.position.y =
+        balloonHeight + (reduced ? 0 : Math.sin(t * 0.8) * 0.15);
       todoBalloon.rotation.z = reduced ? 0 : Math.sin(t * 0.55) * 0.025;
       exclamation.lookAt(camera.position);
       const point = new T.Vector3(
@@ -1085,7 +1079,7 @@ export function createWorld(
       );
       l.el.style.transform = `translate(-50%,-100%) translate(${x}px,${y}px)`;
     }
-    const p = new T.Vector3(0, 1.1, 13.8).project(camera);
+    const p = new T.Vector3(0, 1.1, PARK.z).project(camera);
     hl.style.transform = `translate(-50%,0) translate(${(p.x * 0.5 + 0.5) * width}px,${(-p.y * 0.5 + 0.5) * height}px)`;
     renderer.render(scene, camera);
   }

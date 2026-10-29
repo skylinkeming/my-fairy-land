@@ -2916,4 +2916,458 @@ input[type="date"] {
     height: 73px;
   }
 }
-.calendar-task.done .calendar-task-text{text-decoration:line-through;color:#a9b19b}
+.calendar-task.done .calendar-task-text {
+  text-decoration: line-through;
+  color: #a9b19b;
+}
+
+/* Handcrafted strategy-board art direction: timber, parchment and resource terrain. */
+:root {
+  background: #f3ead6;
+  color: #503f2d;
+  --green: #855b3b;
+  --line: #d9c8a6;
+}
+body {
+  background:
+    radial-gradient(ellipse at 60% 20%, #fbf5e6 0, transparent 58%),
+    repeating-linear-gradient(
+      3deg,
+      #8f6a3403 0px,
+      #8f6a3403 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    #f3ead6;
+}
+.brand-mark {
+  background: #96513b;
+  color: #f7e8bf;
+  border: 0;
+  clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
+  border-radius: 0;
+  transform: none;
+}
+.brand-mark .icon {
+  transform: none;
+}
+.brand-mark i {
+  display: none;
+}
+.brand small,
+.eyebrow,
+.section-kicker {
+  color: #9f8861;
+}
+.brand {
+  color: #5c432d;
+}
+.nav-item {
+  color: #9a8769;
+}
+.nav-item.selected {
+  color: #865139;
+}
+.nav-item.selected:after {
+  background: #a75a3e;
+}
+.resident-pill {
+  background: #eee1c4;
+  border-color: #d9c6a2;
+  color: #806343;
+}
+.hero h1 {
+  color: #513c29;
+}
+.handwritten {
+  color: #a25a3b;
+}
+.handwritten svg {
+  stroke: #d8b66c;
+}
+.title-dot {
+  color: #b99758;
+}
+.hero-description {
+  color: #907c5e;
+}
+.primary-button {
+  background: #97553b;
+  color: #fff1ce;
+  border-radius: 5px;
+  box-shadow:
+    0 3px 0 #704028,
+    0 6px 12px #67432a16;
+}
+.primary-button:hover {
+  background: #7d432d;
+  box-shadow:
+    0 3px 0 #5d321f,
+    0 8px 16px #67432a22;
+}
+.world-wrap:before {
+  background: radial-gradient(ellipse at 50% 54%, #d7c49b55, transparent 70%);
+}
+.map-label {
+  background: #f8edceef;
+  border-color: #d5bc85;
+  border-radius: 6px;
+  box-shadow:
+    0 3px 0 #9a754c30,
+    0 5px 12px #4b321e1c;
+  backdrop-filter: none;
+}
+.map-label:hover {
+  background: #fff2d1;
+}
+.map-label strong {
+  color: #654d32;
+  font-weight: 600;
+}
+.map-label small {
+  color: #9d8762;
+}
+.label-symbol {
+  border-radius: 2px;
+  background: #d0d9b8;
+  color: #4f6d46;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.label-note .label-symbol {
+  background: #ead49a;
+  color: #9c7732;
+}
+.label-friends .label-symbol {
+  background: #d7dcb2;
+  color: #6b7e3a;
+}
+.label-memories .label-symbol {
+  background: #d2d0c5;
+  color: #73796d;
+}
+.label-arrow {
+  color: #ac8d54;
+}
+.home-label {
+  background: #f4e5bff2;
+  border-color: #d4b578;
+  color: #85683f;
+  box-shadow: 0 2px 0 #9c78472b;
+}
+.weather-pill {
+  color: #9a8158;
+}
+.resident-activity {
+  background: #f5e9cfee;
+  border-color: #d7c49a;
+  color: #8a704b;
+}
+.map-controls {
+  background: #f6ecd6;
+  border-color: #cdb58b;
+  border-radius: 5px;
+  box-shadow: 0 3px 0 #bba47f38;
+}
+.map-expand-button,
+.round-button {
+  color: #8f7049;
+}
+.map-expand-button:hover,
+.round-button:hover {
+  background: #e8d9b7;
+}
+.map-help,
+.map-caption {
+  color: #a18d66;
+}
+.caption-line {
+  background: #c3ad80;
+}
+.control-divider {
+  background: #dbc7a0;
+}
+.map-expanded.world-wrap {
+  background: #efe4cc;
+}
+.world-loading {
+  background: #efe4cc;
+  color: #94794f;
+}
+.board-legend {
+  position: absolute;
+  bottom: 92px;
+  left: 6%;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  z-index: 2;
+  pointer-events: none;
+  padding: 8px 11px;
+  background: #f5ead5de;
+  border: 1px solid #dfcca6;
+  border-radius: 4px;
+  color: #967b52;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+.board-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.board-legend span:before {
+  content: "";
+  width: 11px;
+  height: 12px;
+  background: #446848;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.board-legend [data-terrain="grain"]:before {
+  background: #c6a04b;
+}
+.board-legend [data-terrain="pasture"]:before {
+  background: #8b9e50;
+}
+.board-legend [data-terrain="mountain"]:before {
+  background: #929086;
+}
+.board-legend [data-terrain="clay"]:before {
+  background: #b47a52;
+}
+.island-card {
+  border-radius: 6px;
+  background: #e6e9d7;
+  border-color: #c7ccb0;
+  box-shadow: 0 3px 0 #d3c4a43d;
+}
+.island-card.peach {
+  background: #f0e3bc;
+  border-color: #d8bf85;
+}
+.island-card.yellow {
+  background: #e7e7c9;
+  border-color: #c6c89c;
+}
+.island-card.lavender {
+  background: #e5e1d6;
+  border-color: #c5c0ad;
+}
+.card-icon {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: #c1cda5;
+  color: #577248;
+}
+.peach .card-icon {
+  background: #e4ca86;
+  color: #a07d35;
+}
+.yellow .card-icon {
+  background: #cfd4a1;
+  color: #748445;
+}
+.lavender .card-icon {
+  background: #c8c7b9;
+  color: #787e70;
+}
+.card-number {
+  display: grid;
+  place-items: center;
+  border: 1px solid #b9a06c;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  background: #f5e8c6;
+  color: #80613b;
+  font-size: 12px;
+  font-style: normal;
+  box-shadow: 0 2px 0 #bba27238;
+}
+.peach .card-number,
+.yellow .card-number,
+.lavender .card-number {
+  color: #936a38;
+}
+.card-en {
+  color: #8d966d;
+}
+.peach .card-en {
+  color: #ac8c4a;
+}
+.yellow .card-en {
+  color: #8e9961;
+}
+.lavender .card-en {
+  color: #94917d;
+}
+.island-card h3 {
+  color: #5d4b32;
+}
+.island-card p {
+  color: #978969;
+}
+.card-bottom,
+.peach .card-bottom,
+.yellow .card-bottom,
+.lavender .card-bottom {
+  border-color: #cabb963f;
+  color: #9a8760;
+}
+.card-arrow {
+  background: #f7eccc;
+  color: #96774b;
+}
+.section-top h2 {
+  color: #614a32;
+}
+.section-top h2 > span,
+.section-note {
+  color: #a3906d;
+}
+.today-strip {
+  background: #ece1c5;
+  border-color: #d9c7a1;
+  border-radius: 5px;
+}
+.today-strip p {
+  color: #937d57;
+}
+.strip-flower {
+  color: #b59855;
+}
+.strip-signature {
+  color: #ad956b;
+}
+footer {
+  color: #ab966f;
+}
+.island-panel {
+  background: #f9f1df;
+  border: 2px solid #d7bf91;
+  border-radius: 10px;
+}
+.panel-header,
+.panel-footer {
+  border-color: #dfccaa;
+}
+.panel-header h2 {
+  color: #674c31;
+}
+.panel-header p {
+  color: #a18a61;
+}
+.panel-icon {
+  background: #d9dfc2;
+  color: #657b49;
+  border-radius: 3px;
+}
+.panel-icon.peach {
+  background: #e8d3a2;
+  color: #a38140;
+}
+.panel-icon.yellow {
+  background: #dce0b6;
+  color: #7e8e4c;
+}
+.panel-icon.lavender {
+  background: #d6d3c6;
+  color: #808476;
+}
+.todo-row {
+  background: #f1ead5;
+  border-color: #dfd2ae;
+  border-radius: 5px;
+}
+.todo-edit-row {
+  background: #f1e7cc;
+  border-color: #baa273;
+  border-radius: 6px;
+}
+.note-paper {
+  background: #fbf0d8;
+  border-color: #ddc8a0;
+  border-radius: 5px;
+}
+.paper-form,
+.memory-form {
+  background: #eee2c5;
+  border-color: #decca6;
+}
+.view-switch {
+  background: #e8dcc0;
+}
+.view-switch button.active {
+  background: #fff3d9;
+  color: #8b6741;
+}
+.calendar-day {
+  background: #fcf4e1;
+  border-color: #dfd1b1;
+}
+.calendar-day.is-today {
+  background: #eee1bb;
+}
+.calendar-day.is-today > span {
+  background: #9a6340;
+}
+.weekday {
+  background: #e9dcc0;
+  color: #987e51;
+}
+.calendar-grid {
+  border-color: #dfd1b1;
+}
+.calendar-task {
+  background: #e2e5c8;
+  color: #7e8b57;
+}
+.toast {
+  background: #785236;
+  color: #fff0cd;
+}
+.friends-intro {
+  background: #e9dfc1;
+}
+.resident-card {
+  background: #efe4c9;
+  border-color: #dbc8a2;
+}
+.resident-art {
+  background: radial-gradient(ellipse, #f6e8c8, #dfceaa);
+}
+.soft-notice,
+.panel-footer {
+  color: #ac956a;
+}
+.todo-scope-switch button.active {
+  background: #e4d8b8;
+  border-color: #c5af7f;
+  color: #927344;
+}
+@media (max-width: 760px) {
+  .board-legend {
+    gap: 9px;
+    bottom: 92px;
+    left: 5%;
+    padding: 6px 9px;
+    font-size: 7px;
+  }
+  .board-legend span:before {
+    width: 9px;
+    height: 10px;
+  }
+  .map-caption {
+    bottom: 82px;
+  }
+  .map-expanded .board-legend {
+    bottom: 130px;
+  }
+  .resident-activity {
+    font-size: 8px;
+  }
+  .island-panel {
+    border-radius: 8px;
+  }
+}
+.memory-form .primary-button{background:#827258;color:#fff1d1}.memory-form input,.memory-form textarea{border-color:#d6c5a2;background:#fff7e7}.photo-upload{background:#f7edda;border-color:#bda77e}.photo-upload>div{color:#a38b65}.photo-upload span{color:#b6a17c}.memory-meta{color:#ab9876}.polaroid{background:#fff5df;border-color:#dfcba8}.polaroid h3{color:#7a6446}.polaroid p,.memory-empty p{color:#a08b6a}.memory-empty h3{color:#9c835d}

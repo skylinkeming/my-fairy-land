@@ -32,7 +32,7 @@ export function findIslandPath(from, to, links) {
 export const PARK = {
   id: "park",
   x: 0,
-  z: 13.8,
+  z: 14.8,
   seats: [
     { x: 1.45, z: 3.8 },
     { x: 2.95, z: 3.8 },
