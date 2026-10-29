@@ -39,6 +39,6 @@ npm test          # 娃娃活動邏輯與 Chromium 功能測試
 
 第一次啟用：在 GitHub 儲存庫的 **Settings → Pages**，選擇 **Deploy from a branch**，分支選 **gh-pages**、目錄選 **/ (root)**，再儲存。預期網址為 `https://skylinkeming.github.io/my-fairy-land/`；是否已上線應以 GitHub Pages 的部署結果為準。
 
-後續變更先執行 `npm ci`、`npm test`、`npm run build`，再把 `dist/` 內容更新至 `gh-pages`，並保留 `.nojekyll`。不要把原始 `index.html` 直接當作正式部署檔；它需要開發伺服器，正式檔位於 `dist/`。
+後續每次修改完成並驗證後，直接將原始碼提交至 `main`，並把 `dist/` 內容發布至 `gh-pages`，不需另行確認。發布前執行 `npm ci`、`npm test`、`npm run build`；若檢查失敗，應如實回報。發布時保留 `.nojekyll`。不要把原始 `index.html` 直接當作正式部署檔；它需要開發伺服器，正式檔位於 `dist/`。
 
 若裝置不支援 WebGL、GPU 連線中斷或 3D 模組下載失敗，網站會改用可點選的插畫地圖。主程式無法下載時會顯示可讀取的重新載入畫面。
