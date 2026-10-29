@@ -35,7 +35,7 @@ npm test          # 娃娃活動邏輯與 Chromium 功能測試
 
 ## GitHub Pages 發布
 
-原始碼保存在 `codex/family-island`，正式建置檔放在 `gh-pages` 分支。
+原始碼保存在 `main`，後續直接在 `main` 開發，不需為每次修改建立分支。`gh-pages` 分支僅存放正式建置檔，用於發布網站。
 
 第一次啟用：在 GitHub 儲存庫的 **Settings → Pages**，選擇 **Deploy from a branch**，分支選 **gh-pages**、目錄選 **/ (root)**，再儲存。預期網址為 `https://skylinkeming.github.io/my-fairy-land/`；是否已上線應以 GitHub Pages 的部署結果為準。
 
