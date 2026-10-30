@@ -136,3 +136,25 @@ test('a blocked walker waits three seconds before rerouting and retains its goal
   }
   assert.ok(replanned && arrived, 'a sustained stall must produce a usable detour');
 });
+
+test('batching static scenery preserves world bounds and collected collision footprints', async () => {
+  const {batchExpandedScenery} = await import('../src/expanded-scenery.js');
+  const scene = new T.Scene(), island = new T.Group(), dressing = new T.Group();
+  island.position.set(15, 0, -7); island.rotation.y = .3;
+  dressing.name = 'expanded-island-dressing';
+  scene.add(island); island.add(dressing);
+  const material = new T.MeshBasicMaterial({color: '#b38c60'});
+  for (let i = 0; i < 4; i++) {
+    const prop = new T.Mesh(new T.BoxGeometry(1, 2, 1), material);
+    prop.position.set(i * 2, 1, i % 2); prop.rotation.y = i * .2;
+    prop.userData.walkObstacle = true;
+    dressing.add(prop);
+  }
+  const data = collectSceneryNavigation({home: island}, [], [], 0);
+  const before = new T.Box3().setFromObject(dressing, true);
+  batchExpandedScenery(scene);
+  const after = new T.Box3().setFromObject(dressing, true);
+  assert.ok(before.min.distanceTo(after.min) < .00001 && before.max.distanceTo(after.max) < .00001);
+  assert.equal(dressing.children.length, 1, 'same-material props share one draw call');
+  assert.equal(data.obstacles.length, 4, 'individual collision footprints survive in navigation data');
+});

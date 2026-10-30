@@ -1,3 +1,4 @@
+import { addExpandedScenery, batchExpandedScenery } from "./expanded-scenery.js";
 import { seatedRootHeight } from "./resident-pose.js";
 import * as T from "three";
 import { createDinosaur } from "./dinosaur.js";
@@ -159,13 +160,13 @@ export function createWorld(
   });
   // A blue maritime board with a layered timber frame replaces the soft lagoon.
   for (const [radius, y, height, color] of [
-    [48.4, -1.12, 0.45, "#68462e"],
-    [47.9, -0.88, 0.1, "#c5a56c"],
-    [47.3, -0.81, 0.06, "#347387"],
+    [65.1, -1.12, 0.45, "#68462e"],
+    [64.6, -0.88, 0.1, "#c5a56c"],
+    [64, -0.81, 0.06, "#347387"],
   ]) {
     const board = cyl(radius, radius, height, color, 0, y, 1, scene, 6);
     board.rotation.y = 0;
-    if (radius === 47.3)
+    if (radius === 64)
       board.material = [
         mat("#28566b"),
         new T.MeshStandardMaterial({
@@ -174,10 +175,10 @@ export function createWorld(
         }),
         mat("#28566b"),
       ];
-    if (radius === 48.4) board.material = woodMaterial();
+    if (radius === 65.1) board.material = woodMaterial();
   }
   const shadow = new T.Mesh(
-    new T.PlaneGeometry(140, 140),
+    new T.PlaneGeometry(190, 190),
     new T.ShadowMaterial({ opacity: 0.12 }),
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -741,6 +742,8 @@ export function createWorld(
     decorateBoardTile(group, BOARD_THEMES[id], { box, ball, cyl, mesh, top });
     if (id === 'park') group.children.find(child => child.name === 'board-number-token').position.set(-.5, top + .12, -3.7);
   }
+  const expandedScenery = addExpandedScenery({groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
+  container.dataset.expandedScenery = JSON.stringify(expandedScenery);
   container.dataset.artStyle = "catan-inspired";
   container.dataset.landAreaMultiplier = String(landScale ** 2);
   container.dataset.scenery = "park hills river";
@@ -807,6 +810,7 @@ export function createWorld(
     previousActivity = sessionStorage.getItem("little-island-last-activity");
   } catch {}
   const navigationData = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
+  batchExpandedScenery(scene);
   // The pavilion is reserved scenery, not a shortcut through its posts.
   navigationData.obstacles.push({id: 'park-pavilion', island: 'park', minX: -4.95, maxX: -2.65, minZ: PARK.z + 1.55, maxZ: PARK.z + 3.85});
   const life = createResidentLife({
@@ -1327,7 +1331,7 @@ export function createWorld(
       frameDirty = true;
       todoBalloon.visible = count > 0;
     },
-    getNavigationData() {return {nodes: [...defs, PARK], links: [["home","todo"],["home","note"],["home","friends"],["home","memories"],["note","friends"],["home","park"]], ...navigationData};},
+    getNavigationData() {return {nodes: [...defs, PARK], links: [["home","todo"],["home","note"],["home","friends"],["home","memories"],["note","friends"],["home","park"]], ...navigationData, scenery: expandedScenery};},
     getResidentActivities() {
       return life.descriptions();
     },
