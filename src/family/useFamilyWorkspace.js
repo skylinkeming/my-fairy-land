@@ -1,10 +1,11 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {authRedirectUrl,backendConfig,getFamilyClient,familyError} from './client.js';
 import {createFamilyApi} from './api.js';
+import {googleSignInOptions,consumeOAuthError} from './auth.js';
 const emptyWorkspace={userId:null,families:[],selected:null,loading:false,settled:false,error:null};
 export function useFamilyWorkspace() {
   const [client,setClient]=useState(null);
-  const [auth,setAuth]=useState({ready:!backendConfig,session:null,recovery:false,error:null});
+  const [auth,setAuth]=useState({ready:!backendConfig,session:null,error:null});
   const [workspace,setWorkspace]=useState(emptyWorkspace);
   const [details,setDetails]=useState({userId:null,familyId:null,members:[],invites:[],loading:false,error:null});
   const [version,setVersion]=useState(0);
@@ -13,17 +14,20 @@ export function useFamilyWorkspace() {
   const api=useMemo(()=>client?createFamilyApi(client):null,[client]);
   useEffect(()=>{
     let cancelled=false,subscription,received=false;
+    const callbackError=backendConfig?consumeOAuthError(window.location,window.history):null;
     if(!backendConfig) return;
     getFamilyClient().then(async next=>{
+      const {error:initializationError}=await next.auth.initialize();
       if(cancelled)return;setClient(next);
+      const loginError=callbackError||(initializationError?familyError(initializationError):null);
       const response=next.auth.onAuthStateChange((event,session)=>{
         received=true;if(cancelled)return;
-        setAuth(previous=>({ready:true,session,recovery:event==='PASSWORD_RECOVERY'||(Boolean(session)&&previous.recovery&&event!=='SIGNED_OUT'),error:null}));
+        setAuth({ready:true,session,error:event==='INITIAL_SESSION'?loginError:null});
       });
       subscription=response.data.subscription;
       const {data,error}=await next.auth.getSession();
-      if(!cancelled && !received) setAuth({ready:true,session:data?.session||null,recovery:false,error:error?familyError(error):null});
-    }).catch(error=>{if(!cancelled)setAuth({ready:true,session:null,recovery:false,error:familyError(error)});});
+      if(!cancelled && !received) setAuth({ready:true,session:data?.session||null,error:error?familyError(error):loginError});
+    }).catch(error=>{if(!cancelled)setAuth({ready:true,session:null,error:familyError(error)});});
     return ()=>{cancelled=true;subscription?.unsubscribe();};
   },[]);
   const refresh=useCallback(async preferred=>{
@@ -74,15 +78,12 @@ export function useFamilyWorkspace() {
   const visibleDetails=details.userId===userId && details.familyId===activeFamily?.id?details:{members:[],invites:[],loading:Boolean(activeFamily),error:null};
   return {
     configured:Boolean(backendConfig),ready:auth.ready&&(!userId||(workspace.userId===userId&&workspace.settled)),
-    user,activeFamily,families,recovery:auth.recovery,loading:workspace.loading,
+    user,activeFamily,families,
     ...visibleDetails,loading:workspace.loading||visibleDetails.loading,
     error:auth.error||(workspace.userId===userId?workspace.error:null)||visibleDetails.error,
     refresh,
     selectFamily(id){if(!families.some(family=>family.id===id))return;setWorkspace(previous=>({...previous,selected:id}));try{localStorage.setItem(`little-island-active-family:${userId}`,id);}catch{ /* Optional preference. */ }},
-    signIn:(email,password)=>authCall('signInWithPassword',{email:email.trim(),password}),
-    signUp:(email,password,name)=>authCall('signUp',{email:email.trim(),password,options:{data:{display_name:name.trim()},emailRedirectTo:authRedirectUrl()}}),
-    resetPassword:email=>authCall('resetPasswordForEmail',email.trim(),{redirectTo:authRedirectUrl()}),
-    async updatePassword(password){await authCall('updateUser',{password});setAuth(previous=>({...previous,recovery:false}));},
+    async signInWithGoogle(){setAuth(previous=>({...previous,error:null}));return authCall('signInWithOAuth',googleSignInOptions(authRedirectUrl()));},
     signOut:()=>authCall('signOut'),
     async createFamily(name){const id=await familyAction('create',name);await refresh(id);return id;},
     async joinFamily(code){const id=await familyAction('join',code);await refresh(id);return id;},

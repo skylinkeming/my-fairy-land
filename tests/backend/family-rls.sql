@@ -57,6 +57,17 @@ select public.island_remove_member(:'family_a','22222222-2222-4222-8222-22222222
 select set_config('request.jwt.claim.sub','22222222-2222-4222-8222-222222222222',false);
 select pg_temp.assert_true((select count(*)=0 from public.island_families where id=:'family_a'),'removal revokes access without refreshing JWT');
 select pg_temp.assert_true((select count(*)=1 from public.island_families),'removal does not affect another family');
+-- Google names are display text; role claims never grant family ownership.
+select set_config('request.jwt.claim.sub','33333333-3333-4333-8333-333333333333',false);
+select set_config('request.jwt.claims','{"user_metadata":{"full_name":"Google 家人 C","role":"owner"}}',false);
+select public.island_create_family('Google family') as google_family \gset
+select pg_temp.assert_true((select display_name='Google 家人 C' from public.island_family_members where family_id=:'google_family' and user_id=auth.uid()),'Google full_name appears in the created family');
+select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);
+select public.island_create_invite(:'family_a') as google_invite \gset
+select set_config('request.jwt.claim.sub','44444444-4444-4444-8444-444444444444',false);
+select set_config('request.jwt.claims','{"user_metadata":{"name":"Google 家人 D","role":"owner"}}',false);
+select public.island_join_family(:'google_invite'::jsonb->>'code');
+select pg_temp.assert_true((select display_name='Google 家人 D' and role='member' from public.island_family_members where family_id=:'family_a' and user_id=auth.uid()),'Google name is supported without allowing metadata role escalation');
 select set_config('request.jwt.claim.sub','',false);
 select pg_temp.fails($q$select public.island_create_family('No session')$q$,'auth_required');
 reset role;

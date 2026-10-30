@@ -1,9 +1,9 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {familyError} from '../family/client.js';
+import {familyDisplayName} from '../family/auth.js';
 
 export function FamilyPanel({workspace,onClose}) {
-  const [mode,setMode]=useState('signin'),[familyMode,setFamilyMode]=useState('dashboard');
-  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[nickname,setNickname]=useState('');
+  const [familyMode,setFamilyMode]=useState('dashboard');
   const [name,setName]=useState(''),[joinCode,setJoinCode]=useState(''),[rename,setRename]=useState('');
   const [busy,setBusy]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [invitation,setInvitation]=useState(null),[confirmation,setConfirmation]=useState(null);
@@ -16,8 +16,7 @@ export function FamilyPanel({workspace,onClose}) {
     document.addEventListener('keydown',escape,true);
     return ()=>{alive.current=false;request.current++;document.body.classList.remove('family-open');document.removeEventListener('keydown',escape,true);requestAnimationFrame(()=>document.querySelector('#family-account')?.focus());};
   },[onClose]);
-  useEffect(()=>{request.current++;setInvitation(null);setConfirmation(null);setError('');setMessage('');setBusy('');setPassword('');setJoinCode('');setFamilyMode('dashboard');setRename(workspace.activeFamily?.name||'');},[identity]);
-  useEffect(()=>{setPassword('');setError('');setMessage('');},[mode]);
+  useEffect(()=>{request.current++;setInvitation(null);setConfirmation(null);setError('');setMessage('');setBusy('');setJoinCode('');setFamilyMode('dashboard');setRename(workspace.activeFamily?.name||'');},[identity]);
   async function run(key,action,success) {
     if(busy)return;
     const token=++request.current,context=identityRef.current;
@@ -26,22 +25,16 @@ export function FamilyPanel({workspace,onClose}) {
     catch(problem){if(alive.current && token===request.current && context===identityRef.current)setError(familyError(problem));}
     finally {if(alive.current && token===request.current)setBusy('');}
   }
-  function submitAuth(event) {
-    event.preventDefault();
-    if(workspace.recovery){run('password',()=>workspace.updatePassword(password),()=>{setPassword('');setMessage('密碼已更新。');});return;}
-    if(mode==='reset'){run('reset',()=>workspace.resetPassword(email),()=>setMessage('如果這個 Email 已註冊，你將收到重設密碼的信件。'));return;}
-    if(mode==='signup')run('signup',()=>workspace.signUp(email,password,nickname),data=>{setPassword('');setMessage(data?.session?'註冊完成。':'驗證信已寄出，請先確認 Email，再回來登入。');});
-    else run('signin',()=>workspace.signIn(email,password),()=>setPassword(''));
-  }
   const family=workspace.activeFamily,owner=family?.role==='owner';
-  const authForm=()=> <form className="family-form" onSubmit={submitAuth}>
-    {mode==='signup'&&!workspace.recovery&&<label>你的稱呼<input value={nickname} onChange={event=>setNickname(event.target.value)} minLength={1} maxLength={40} autoComplete="nickname" required/></label>}
-    {!workspace.recovery&&<label>Email<input type="email" value={email} onChange={event=>setEmail(event.target.value)} autoComplete="email" maxLength={254} required/></label>}
-    {(workspace.recovery||mode!=='reset')&&<label>{workspace.recovery?'新密碼':'密碼'}<input type="password" aria-label={workspace.recovery?'新密碼':'密碼'} value={password} onChange={event=>setPassword(event.target.value)} minLength={mode==='signin'&&!workspace.recovery?undefined:8} autoComplete={mode==='signin'&&!workspace.recovery?'current-password':'new-password'} required/>{(mode==='signup'||workspace.recovery)&&<small>至少 8 個字元。</small>}</label>}
-    <button className="primary-button" disabled={Boolean(busy)}>{busy?'處理中…':workspace.recovery?'設定新密碼':mode==='signup'?'註冊帳號':mode==='reset'?'寄送重設密碼信':'登入'}</button>
-    {!workspace.recovery&&mode==='signin'&&<button className="family-text-button" type="button" onClick={()=>setMode('reset')}>忘記密碼？</button>}
-    {!workspace.recovery&&mode==='reset'&&<button className="family-text-button" type="button" onClick={()=>setMode('signin')}>返回登入</button>}
-  </form>;
+  const googleButton=()=> <button className="family-google-button" disabled={!workspace.configured||Boolean(busy)} onClick={()=>run('google',()=>workspace.signInWithGoogle())}>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5h6.6c3.9-3.6 6.1-8.8 6.1-14.9Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5c-1.8 1.2-4.1 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H5.8v5.2A20.4 20.4 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12.2 12.2 0 0 1 0-7.2v-5.2H5.8a20 20 0 0 0 0 17.6l6.8-5.2Z"/><path fill="#EA4335" d="M24 12c3 0 5.6 1 7.7 3l5.8-5.8A19.6 19.6 0 0 0 24 4 20.4 20.4 0 0 0 5.8 15.2l6.8 5.2C14.2 15.6 18.7 12 24 12Z"/></svg>
+      <span>{busy==='google'?'正在前往 Google…':'使用 Google 帳號登入'}</span>
+    </button>;
+  const googleLogin=()=> <div className="family-google-login">
+    <p className="family-intro">用 Google 帳號回到小島，建立家庭或加入家人的邀請。</p>
+    {googleButton()}
+    <p className="family-login-note">第一次登入就會建立小島帳號，不需要另外設定密碼。加入家庭仍需要家人的邀請碼。</p>
+  </div>;
   const membershipForms=()=> <div className="family-onboarding">
     <div className="family-tabs" role="group" aria-label="建立或加入家庭">
       <button type="button" aria-pressed={familyMode!=='join'} onClick={()=>setFamilyMode('create')}>建立家庭</button>
@@ -64,13 +57,12 @@ export function FamilyPanel({workspace,onClose}) {
       if(event.shiftKey&&(document.activeElement===items[0]||document.activeElement===dialog.current)){event.preventDefault();items.at(-1).focus();}
       else if(!event.shiftKey&&document.activeElement===items.at(-1)){event.preventDefault();items[0].focus();}
     }}>
-      <header className="family-panel-header"><div><span className="section-kicker">A HOME TOGETHER</span><h2 id="family-title">{workspace.recovery?'設定新密碼':workspace.user?'我們的家庭空間':'登入與家庭空間'}</h2></div><button className="round-button" aria-label="關閉家庭空間" onClick={onClose}>×</button></header>
-      {!workspace.configured?<div className="family-welcome"><span aria-hidden="true">⌂</span><h3>一起生活的小島，正在準備中</h3><p>家庭登入尚未開放。現在仍可以先逛小島，使用這個裝置上的日常紀錄。</p><button className="secondary-button" onClick={onClose}>繼續逛小島</button></div>:
+      <header className="family-panel-header"><div><span className="section-kicker">A HOME TOGETHER</span><h2 id="family-title">{workspace.user?'我們的家庭空間':'登入與家庭空間'}</h2></div><button className="round-button" aria-label="關閉家庭空間" onClick={onClose}>×</button></header>
+      {!workspace.configured?<div className="family-welcome"><span aria-hidden="true">⌂</span><h3>一起生活的小島，正在準備中</h3><p>Google 登入尚未開放。現在仍可以先逛小島，使用這個裝置上的日常紀錄。</p>{googleButton()}<button className="secondary-button" onClick={onClose}>繼續逛小島</button></div>:
         !workspace.ready?<p role="status">正在確認帳號與家庭…</p>:
-        workspace.recovery?authForm():
-        !workspace.user?<><p className="family-intro">登入後建立你們的家庭，邀請家人一起加入。</p><div className="family-tabs" role="group" aria-label="帳號操作"><button aria-pressed={mode==='signin'} onClick={()=>setMode('signin')}>登入</button><button aria-pressed={mode==='signup'} onClick={()=>setMode('signup')}>建立帳號</button></div>{authForm()}</>:
+        !workspace.user?googleLogin():
         <>
-          <div className="family-account-summary"><div><strong>{typeof workspace.user.user_metadata?.display_name==='string'?workspace.user.user_metadata.display_name:'小島家人'}</strong><small>{workspace.user.email}</small></div><button className="secondary-button" disabled={Boolean(busy)} onClick={()=>run('signout',()=>workspace.signOut())}>登出</button></div>
+          <div className="family-account-summary"><div><strong>{familyDisplayName(workspace.user.user_metadata)}</strong><small>{workspace.user.email}</small></div><button className="secondary-button" disabled={Boolean(busy)} onClick={()=>run('signout',()=>workspace.signOut())}>登出</button></div>
           {workspace.families.length>0&&<label className="family-selector">目前家庭<select value={family?.id||''} onChange={event=>workspace.selectFamily(event.target.value)}>{workspace.families.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
           {!family||familyMode!=='dashboard'?<>{!family&&<p className="family-intro">先建立一個家庭，或貼上家人分享的邀請碼。</p>}{membershipForms()}</>:
           <>

@@ -3544,3 +3544,10 @@ body.family-open {overflow:hidden;}
 .family-welcome {text-align:center;padding:15px 5px 25px;}.family-welcome>span {font-size:48px;display:block;color:#9baf85;margin-bottom:20px;}.family-welcome p {color:#9a8668;font-size:14px;}
 .family-panel button:disabled {opacity:.6;cursor:wait;}.family-panel :focus-visible,.family-account-button:focus-visible {outline:3px solid #b99b6b;outline-offset:3px;}
 @media(max-width:760px){.family-account-button {max-width:105px;padding:7px 9px;font-size:11px;margin-left:auto;}.site-header {gap:8px;}.family-overlay {padding:12px;}.family-panel {padding:20px 17px;border-radius:17px;}.family-panel h2 {font-size:21px;}.family-context {margin:10px 12px 0;font-size:12px;}.family-extra-actions .secondary-button {flex:1;}}
+.family-google-login {padding:8px 0 14px;}
+.family-google-button {display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:48px;margin:24px 0 16px;padding:12px 18px;border:1px solid #747775;border-radius:24px;background:#fff;color:#1f1f1f;font:500 15px/1.4 Arial,sans-serif;cursor:pointer;}
+.family-google-button:hover {background:#f8faff;box-shadow:0 1px 3px #3c404326;}
+.family-google-button svg {width:20px;height:20px;flex-shrink:0;}
+.family-login-note {font-size:13px;color:#8a785b;}
+
+.family-panel .family-google-button:disabled {cursor:default;box-shadow:none;}

@@ -1,9 +1,11 @@
+import {familyDisplayName} from '../../src/family/auth.js';
+const backends=new WeakMap();
 const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',C='33333333-3333-4333-8333-333333333333';
 export const FAMILY_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',FAMILY_B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 export const users={
-  'a@example.test':{id:A,email:'a@example.test',aud:'authenticated',role:'authenticated',user_metadata:{display_name:'家人 A'}},
-  'b@example.test':{id:B,email:'b@example.test',aud:'authenticated',role:'authenticated',user_metadata:{display_name:'家人 B'}},
-  'c@example.test':{id:C,email:'c@example.test',aud:'authenticated',role:'authenticated',user_metadata:{display_name:'家人 C'}},
+  'a@example.test':{id:A,email:'a@example.test',aud:'authenticated',role:'authenticated',user_metadata:{full_name:'家人 A',name:'家人 A'}},
+  'b@example.test':{id:B,email:'b@example.test',aud:'authenticated',role:'authenticated',user_metadata:{full_name:'家人 B',name:'家人 B'}},
+  'c@example.test':{id:C,email:'c@example.test',aud:'authenticated',role:'authenticated',user_metadata:{full_name:'家人 C',name:'家人 C'}},
 };
 export function session(user) {
   const encode=data=>Buffer.from(JSON.stringify(data)).toString('base64url');
@@ -11,7 +13,8 @@ export function session(user) {
 }
 export async function installBackend(page,{families=false,member=false,twoFamilies=false}={}) {
   const created=new Date().toISOString();
-  const db={families:[],members:[],invites:[],sequence:0,requests:[]};
+  const db={families:[],members:[],invites:[],sequence:0,requests:[],nextGoogleEmail:'a@example.test',oauthFailure:null,oauthTokenFailure:false};
+  backends.set(page,db);
   if(families) {
     db.families.push({id:FAMILY_A,name:'溫暖的小家',owner_id:A,created_at:created});
     db.members.push({family_id:FAMILY_A,user_id:A,display_name:'家人 A',role:'owner',joined_at:created});
@@ -20,7 +23,7 @@ export async function installBackend(page,{families=false,member=false,twoFamili
   if(twoFamilies) {db.families.push({id:FAMILY_B,name:'另一個小家',owner_id:A,created_at:created});db.members.push({family_id:FAMILY_B,user_id:A,display_name:'家人 A',role:'owner',joined_at:created});}
   // Family tests exercise the real SDK and React flows, without painting the unrelated 3D scene.
   await page.route('**/src/world.js',route=>route.abort());
-  const headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS'};
+  const headers={'x-supabase-api-version':'2024-01-01','access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS'};
   await page.route('https://family-test.supabase.co/**',async route=>{
     const request=route.request(),url=new URL(request.url()),method=request.method();
     const reply=(data,status=200)=>route.fulfill({status,headers,contentType:'application/json',...(status===204?{}:{body:JSON.stringify(data)})});
@@ -28,13 +31,19 @@ export async function installBackend(page,{families=false,member=false,twoFamili
     const body=request.postDataJSON()||{};
     let actor;
     try {const token=request.headers().authorization?.replace('Bearer ','');actor=Object.values(users).find(user=>user.id===JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString()).sub);}catch{ /* Anonymous request. */ }
-    db.requests.push({path:url.pathname,method,body});
+    db.requests.push({path:url.pathname,method,body,query:Object.fromEntries(url.searchParams)});
+    if(url.pathname==='/auth/v1/authorize') {
+      const callback=new URL(url.searchParams.get('redirect_to'));
+      if(db.oauthFailure){callback.searchParams.set('error',db.oauthFailure);callback.searchParams.set('error_description','untrusted provider error');}
+      else callback.searchParams.set('code',db.nextGoogleEmail);
+      return route.fulfill({status:302,headers:{...headers,location:callback.href}});
+    }
     if(url.pathname==='/auth/v1/token') {
       if(url.searchParams.get('grant_type')==='refresh_token')return reply(session(users['a@example.test']));
-      const user=users[body.email];return user&&body.password==='password123'?reply(session(user)):reply({code:'invalid_credentials',msg:'Invalid login credentials'},400);
+      if(db.oauthTokenFailure)return reply({code:'bad_code_verifier',msg:'Invalid code'},400);
+      const user=users[body.auth_code];
+      return user&&body.code_verifier?reply(session(user)):reply({error_code:'bad_code_verifier',msg:'Invalid code'},400);
     }
-    if(url.pathname==='/auth/v1/signup')return reply({user:{id:C,email:body.email,user_metadata:body.data||{}},session:null});
-    if(url.pathname==='/auth/v1/recover')return reply({});
     if(url.pathname==='/auth/v1/logout')return reply(null,204);
     if(url.pathname==='/auth/v1/user')return reply(actor||users['a@example.test']);
     if(!actor)return reply({message:'auth_required',code:'42501'},401);
@@ -50,12 +59,12 @@ export async function installBackend(page,{families=false,member=false,twoFamili
     if(rpc==='island_create_family') {
       const id=`cccccccc-cccc-4ccc-8ccc-${String(++db.sequence).padStart(12,'0')}`;
       db.families.push({id,name:body.p_name,owner_id:actor.id,created_at:created});
-      db.members.push({family_id:id,user_id:actor.id,display_name:actor.user_metadata.display_name,role:'owner',joined_at:created});return reply(id);
+      db.members.push({family_id:id,user_id:actor.id,display_name:familyDisplayName(actor.user_metadata),role:'owner',joined_at:created});return reply(id);
     }
     if(rpc==='island_join_family') {
       const invite=db.invites.find(invite=>invite.code===body.p_code&&!invite.used_at&&!invite.revoked_at&&new Date(invite.expires_at)>new Date());
       if(!invite)return reply({message:'invalid_invite',code:'P0001'},400);
-      if(!membership(invite.family_id))db.members.push({family_id:invite.family_id,user_id:actor.id,display_name:actor.user_metadata.display_name,role:'member',joined_at:created});
+      if(!membership(invite.family_id))db.members.push({family_id:invite.family_id,user_id:actor.id,display_name:familyDisplayName(actor.user_metadata),role:'member',joined_at:created});
       invite.used_at=new Date().toISOString();return reply(invite.family_id);
     }
     if(rpc==='island_create_invite') {
@@ -86,10 +95,16 @@ export async function openFamily(page) {
   if(!await page.locator('.family-panel').isVisible())await page.locator('#family-account').click();
   return page.locator('.family-panel');
 }
-export async function signIn(page,email='a@example.test',password='password123') {
+export async function signIn(page,email='a@example.test') {
   const panel=await openFamily(page);
-  await panel.getByLabel('Email',{exact:true}).fill(email);
-  await panel.getByLabel('密碼',{exact:true}).fill(password);
-  await panel.locator('form').getByRole('button',{name:'登入',exact:true}).click();
-  return panel;
+  // The test provider redirects back to the app; the real SDK exchanges a PKCE code.
+  backends.get(page).nextGoogleEmail=email;
+  await panel.getByRole('button',{name:'使用 Google 帳號登入',exact:true}).click();
+  await expectGoogleSession(page);
+  return openFamily(page);
+}
+async function expectGoogleSession(page) {
+  await page.waitForURL(url=>url.origin==='http://127.0.0.1:5174'&&!url.searchParams.has('code'));
+  await page.locator('#family-account').waitFor({state:'visible'});
+  await page.waitForFunction(()=>Object.keys(localStorage).some(key=>key.endsWith('-auth-token')&&JSON.parse(localStorage.getItem(key)||'null')?.user));
 }

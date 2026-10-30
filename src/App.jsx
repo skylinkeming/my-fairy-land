@@ -164,7 +164,7 @@ export default function App() {
   const [familyOpen,setFamilyOpen]=useState(false);
   const openFamily=useCallback(()=>setFamilyOpen(true),[]),closeFamily=useCallback(()=>setFamilyOpen(false),[]);
   const scope=familyScope(workspace.user?.id,workspace.activeFamily?.id,workspace.ready);
-  useEffect(()=>{if(workspace.ready && workspace.user && !workspace.activeFamily || workspace.recovery)setFamilyOpen(true);},[workspace.ready,workspace.user?.id,workspace.activeFamily?.id,workspace.recovery]);
+  useEffect(()=>{if(workspace.ready && ((workspace.user && !workspace.activeFamily) || workspace.error))setFamilyOpen(true);},[workspace.ready,workspace.user?.id,workspace.activeFamily?.id,workspace.error]);
   return <>
     {workspace.ready?<IslandApp key={scope.key} workspace={workspace} scope={scope} familyOpen={familyOpen} onFamilyOpen={openFamily}/>:<main className="family-startup"><span aria-hidden="true">⌂</span><p role="status">正在開啟你的小島…</p><button id="family-account" className="secondary-button" onClick={openFamily}>帳號與家庭</button></main>}
     {familyOpen&&<FamilyPanel workspace={workspace} onClose={closeFamily}/>}

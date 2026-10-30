@@ -36,3 +36,30 @@ test('saved public project settings survive builds and environment overrides req
   assert.throws(()=>readBackendConfig({VITE_SUPABASE_URL:'https://other.supabase.co'},saved));
   assert.equal(readBackendConfig({VITE_SUPABASE_URL:'https://other.supabase.co',VITE_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_other'},saved).url,'https://other.supabase.co');
 });
+
+test('Google profile names use trusted display fields without interpreting role metadata',async()=>{
+  const {familyDisplayName,googleSignInOptions}=await import('../src/family/auth.js');
+  assert.equal(familyDisplayName({full_name:' 家人 ',role:'owner'}),'家人');
+  assert.equal(familyDisplayName({display_name:' ',name:'Google 名字'}),'Google 名字');
+  assert.equal(familyDisplayName({full_name:{bad:true}}),'小島家人');
+  assert.equal(Array.from(familyDisplayName({full_name:'呱'.repeat(50)})).length,40);
+  const login=googleSignInOptions('https://example.com/my-fairy-land/');
+  assert.equal(login.provider,'google');assert.equal(login.options.redirectTo,'https://example.com/my-fairy-land/');
+  assert.equal(login.options.queryParams.prompt,'select_account');assert.equal(login.options.scopes,'openid email profile');
+});
+test('OAuth cancellation removes callback errors and retains unrelated page parameters',async()=>{
+  const {consumeOAuthError}=await import('../src/family/auth.js');
+  for(const suffix of ['?view=map&error=access_denied&error_description=untrusted','#error=access_denied&error_description=untrusted']) {
+    let replaced;
+    const result=consumeOAuthError({href:'https://example.com/my-fairy-land/'+suffix},{state:null,replaceState:(_state,_title,url)=>{replaced=url;}});
+    assert.match(result,/已取消 Google 登入/);assert.doesNotMatch(replaced,/error|untrusted/);
+    if(suffix.startsWith('?'))assert.equal(new URL(replaced).searchParams.get('view'),'map');
+  }
+  assert.equal(consumeOAuthError({href:'https://example.com/?code=valid'},{replaceState(){throw new Error('must preserve PKCE callback');}}),null);
+});
+
+test('Google returns to the current site directory without carrying query parameters or fragments',async()=>{
+  const {oauthRedirectUrl}=await import('../src/family/auth.js');
+  assert.equal(oauthRedirectUrl('https://skylinkeming.github.io/my-fairy-land/?view=map#friends'),'https://skylinkeming.github.io/my-fairy-land/');
+  assert.equal(oauthRedirectUrl('http://localhost:5173/?code=temporary'),'http://localhost:5173/');
+});

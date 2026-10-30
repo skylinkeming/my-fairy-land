@@ -1,4 +1,4 @@
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {spawn,spawnSync} from 'node:child_process';
 import {setTimeout as pause} from 'node:timers/promises';
 const env={...process.env};for(const key of ['DOCKER_HOST','DOCKER_CONTEXT','DOCKER_TLS','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH'])delete env[key];
@@ -14,7 +14,8 @@ try {
   let ready=false;
   for(let attempt=0;attempt<80;attempt++){if(command(['exec',container,'pg_isready','-h','127.0.0.1','-U','postgres','-d','island_test']).status===0){ready=true;break;}await pause(150);}
   if(!ready)throw new Error('PostgreSQL did not start.');
-  const migration=readFileSync(new URL('../supabase/migrations/202610300001_family_spaces.sql',import.meta.url),'utf8');
+  const directory=new URL('../supabase/migrations/',import.meta.url);
+  const migration=readdirSync(directory).filter(file=>file.endsWith('.sql')).sort().map(file=>readFileSync(new URL(file,directory),'utf8')).join('\n');
   must(psql(readFileSync(new URL('../tests/backend/bootstrap.sql',import.meta.url),'utf8')));
   must(psql(migration));
   must(psql(readFileSync(new URL('../tests/backend/family-rls.sql',import.meta.url),'utf8')));
