@@ -158,3 +158,21 @@ test('batching static scenery preserves world bounds and collected collision foo
   assert.equal(dressing.children.length, 1, 'same-material props share one draw call');
   assert.equal(data.obstacles.length, 4, 'individual collision footprints survive in navigation data');
 });
+
+test('natural scenery fills different depths while preserving bridge corridors and prop spacing', async () => {
+  const {createNaturalLayout} = await import('../src/scenery-layout.js');
+  const home = {id: 'home', x: 0, z: 0}, todo = {id: 'todo', x: -25, z: 0};
+  const options = {id: 'home', node: home, nodes: [home, todo], obstacles: [house]};
+  const plan = createNaturalLayout(options);
+  assert.equal(plan.pockets.length, 8);
+  assert.deepEqual(plan.pockets, createNaturalLayout(options).pockets, 'landscape does not reshuffle on every refresh');
+  const radii = plan.pockets.map(point => Math.hypot(point.x,point.z));
+  assert.ok(Math.max(...radii)-Math.min(...radii)>2, 'avoid placing every prop on one circular perimeter');
+  for(const point of [...plan.pockets,...plan.groves]) {
+    assert.ok(!plan.nearExit(point.x,point.z), 'keep a broad, continuous bridge approach');
+    assert.ok(Math.hypot(point.x,point.z)<10.66);
+  }
+  for(let i=0;i<plan.pockets.length;i++) for(let j=i+1;j<plan.pockets.length;j++) {
+    assert.ok(Math.hypot(plan.pockets[i].x-plan.pockets[j].x,plan.pockets[i].z-plan.pockets[j].z)>3.25);
+  }
+});

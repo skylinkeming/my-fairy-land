@@ -38,11 +38,11 @@ export function terrainTexture(type) {
   const c = canvas.getContext("2d"),
     rand = randomGenerator(type.length * 47 + type.charCodeAt(0));
   const colors = {
-    forest: "#426747",
-    grain: "#c7a456",
-    pasture: "#909e58",
-    mountain: "#929187",
-    clay: "#b77d55",
+    forest: "#71876b",
+    grain: "#b8ad79",
+    pasture: "#98a67d",
+    mountain: "#959b8b",
+    clay: "#b4a083",
     sea: "#326c82",
     wood: "#987045",
   };
@@ -54,82 +54,23 @@ export function terrainTexture(type) {
     c.fillRect(rand() * 512, rand() * 512, rand() * 3 + 1, rand() * 2 + 1);
   }
   c.lineCap = "round";
-  if (type === "grain") {
-    for (let band = 0; band < 10; band++) {
-      c.strokeStyle = band % 2 ? "#e2be67" : "#9c7c38";
-      c.lineWidth = 13;
-      c.beginPath();
-      c.moveTo(-20, band * 59);
-      c.bezierCurveTo(
-        130,
-        band * 59 - 35,
-        300,
-        band * 59 + 30,
-        540,
-        band * 59 - 12,
-      );
-      c.stroke();
+  if (["forest", "grain", "pasture", "mountain", "clay"].includes(type)) {
+    // Quiet, mottled natural ground instead of printed resource symbols or grids.
+    for (let i = 0; i < 100; i++) {
+      const x = rand() * 512, y = rand() * 512, radius = 12 + rand() * 48;
+      const gradient = c.createRadialGradient(x, y, 0, x, y, radius);
+      gradient.addColorStop(0, i % 2 ? "#edf0c814" : "#3d543912");
+      gradient.addColorStop(1, "#68764c00");
+      c.fillStyle = gradient;
+      c.fillRect(x-radius,y-radius,radius*2,radius*2);
     }
-    for (let i = 0; i < 180; i++) {
-      const x = rand() * 512,
-        y = rand() * 512;
-      c.strokeStyle = "#f2d990";
-      c.lineWidth = 2;
-      c.beginPath();
-      c.moveTo(x, y + 10);
-      c.lineTo(x, y - 8);
-      c.moveTo(x, y);
-      c.lineTo(x - 5, y - 5);
-      c.moveTo(x, y - 4);
-      c.lineTo(x + 5, y - 9);
-      c.stroke();
+    for (let i = 0; i < 900; i++) {
+      const x = rand()*512, y = rand()*512;
+      c.strokeStyle = i % 3 ? "#4e614326" : "#ece7c333";
+      c.lineWidth = .5;
+      c.beginPath();c.moveTo(x,y);
+      c.lineTo(x+(rand()-.5)*3,y-1-rand()*2);c.stroke();
     }
-  } else if (type === "forest") {
-    for (let i = 0; i < 160; i++) {
-      const x = rand() * 512,
-        y = rand() * 512,
-        size = 8 + rand() * 17;
-      c.fillStyle = ["#294d37", "#557b4a", "#6c8850"][i % 3];
-      c.beginPath();
-      c.moveTo(x, y - size);
-      c.lineTo(x - size * 0.65, y + size * 0.55);
-      c.lineTo(x + size * 0.65, y + size * 0.55);
-      c.fill();
-    }
-  } else if (type === "pasture") {
-    for (let i = 0; i < 320; i++) {
-      const x = rand() * 512,
-        y = rand() * 512;
-      c.strokeStyle = i % 3 ? "#64783e88" : "#c5ca7b";
-      c.lineWidth = 1.5;
-      c.beginPath();
-      c.moveTo(x - 3, y - 5);
-      c.lineTo(x, y);
-      c.lineTo(x + 3, y - 7);
-      c.stroke();
-    }
-  } else if (type === "mountain") {
-    for (let i = 0; i < 55; i++) {
-      const x = rand() * 512,
-        y = rand() * 512,
-        r = 12 + rand() * 28;
-      c.fillStyle = i % 2 ? "#6d756d" : "#b4b3a0";
-      c.beginPath();
-      c.moveTo(x - r, y + r * 0.5);
-      c.lineTo(x, y - r);
-      c.lineTo(x + r, y + r * 0.5);
-      c.closePath();
-      c.fill();
-      c.strokeStyle = "#dedac5";
-      c.lineWidth = 1;
-      c.stroke();
-    }
-  } else if (type === "clay") {
-    for (let j = 0; j < 14; j++)
-      for (let i = 0; i < 12; i++) {
-        c.fillStyle = (i + j) % 3 ? "#8f563b44" : "#d9a57566";
-        c.fillRect(i * 48 + (j % 2) * 24, j * 38, 43, 30);
-      }
   } else if (type === "sea") {
     for (let i = 0; i < 140; i++) {
       const x = rand() * 512,
@@ -177,88 +118,7 @@ export function woodMaterial() {
     roughness: 1,
   });
 }
-function numberTexture(number) {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 256;
-  const c = canvas.getContext("2d");
-  c.fillStyle = "#f3e2b8";
-  c.fillRect(0, 0, 256, 256);
-  c.strokeStyle = "#b39059";
-  c.lineWidth = 3;
-  c.beginPath();
-  c.arc(128, 128, 111, 0, Math.PI * 2);
-  c.stroke();
-  c.strokeStyle = "#d4bb86";
-  c.lineWidth = 1;
-  c.beginPath();
-  c.arc(128, 128, 101, 0, Math.PI * 2);
-  c.stroke();
-  c.fillStyle = [6, 8].includes(number) ? "#9f3f2d" : "#493624";
-  c.font = "bold 112px Georgia, serif";
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  c.fillText(String(number), 128, 117);
-  const dots = { 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3 }[number] || 2;
-  for (let i = 0; i < dots; i++) {
-    c.beginPath();
-    c.arc(128 + (i - (dots - 1) / 2) * 17, 187, 4.4, 0, Math.PI * 2);
-    c.fill();
-  }
-  return canvasTexture(canvas);
-}
 export function decorateBoardTile(group, theme, { box, ball, cyl, mesh, top }) {
-  // Printed number discs and colored road pieces evoke a physical strategy board.
-  const token = new THREE.Group();
-  token.position.set(
-    theme.terrain === "mountain" ? -1.5 : 1.1,
-    top + 0.12,
-    theme.terrain === "mountain" ? 3.6 : -3.5,
-  );
-  group.add(token);
-  token.name = "board-number-token";
-  token.userData.walkObstacle = true;
-  cyl(0.99, 0.99, 0.12, "#90683d", 0, 0, 0, token, 48);
-  const face = cyl(0.92, 0.92, 0.05, "#f3e2b8", 0, 0.085, 0, token, 48);
-  face.material = [
-    new THREE.MeshStandardMaterial({ color: "#d8bb82" }),
-    new THREE.MeshStandardMaterial({
-      map: numberTexture(theme.number),
-      roughness: 1,
-    }),
-    new THREE.MeshStandardMaterial({ color: "#d8bb82" }),
-  ];
-  for (const angle of [Math.PI * 0.65, Math.PI * 1.35]) {
-    const centerX = Math.sin(angle) * 6.3,
-      centerZ = Math.cos(angle) * 6.3;
-    for (let i = 0; i < 3; i++) {
-      const road = box(
-        1.14,
-        0.17,
-        0.22,
-        theme.piece,
-        centerX + (i - 1) * 1.25 * Math.cos(angle),
-        top + 0.1,
-        centerZ - (i - 1) * 1.25 * Math.sin(angle),
-        group,
-      );
-      road.rotation.y = angle;
-    }
-  }
-  // Thin golden outlines keep the resource hexes readable at overview scale.
-  const points = [];
-  for (let i = 0; i < 6; i++)
-    points.push(
-      new THREE.Vector3(
-        Math.sin((i * Math.PI) / 3) * 6.98,
-        top + 0.015,
-        Math.cos((i * Math.PI) / 3) * 6.98,
-      ),
-    );
-  const outline = new THREE.LineLoop(
-    new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color: "#e6c88a" }),
-  );
-  group.add(outline);
   if (theme.terrain === "grain") {
     for (const [x, z] of [
       [-3.9, 1.6],

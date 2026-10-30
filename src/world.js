@@ -133,7 +133,6 @@ export function createWorld(
     g.userData.playerColor = BOARD_THEMES[d.id].piece;
     for (const [r, b, h, c, y] of [
       [2.95, 2.65, 1.18, "#c8ae80", -0.12],
-      [3.04, 2.95, 0.23, "#efdeb1", 0.38],
       [2.93, 3.02, 0.22, d.c, 0.56],
     ]) {
       const m = cyl(r * landScale, b * landScale, h, c, 0, y, 0, g, 6);
@@ -447,7 +446,6 @@ export function createWorld(
   scene.add(garden);
   for (const [radius, bottom, height, color, y] of [
     [7.08, 6.36, 1.18, "#c8ae80", -0.12],
-    [7.3, 7.08, 0.23, "#efdeb1", 0.38],
     [7.03, 7.25, 0.22, "#b4c991", 0.56],
   ]) {
     const terrain = cyl(radius * 2, bottom * 2, height, color, 0, y, 0, garden, 6);
@@ -585,44 +583,7 @@ export function createWorld(
       box(0.055, 0.06, 1.9, "#d6b789", side * 1.44, 0.65, 0, g);
     }
   }
-  // The extra land is usable countryside rather than scaled-up buildings.
-  Object.entries(groups).forEach(([id, group], index) => {
-    curvedPath(
-      [
-        [-5.6, 0],
-        [-3.4, 0.4],
-        [0, 1.6],
-        [3.8, 1],
-        [5.7, 0],
-      ],
-      group,
-    );
-    hill(-4.4, -2.9, 1.65, group);
-    for (let i = 0; i < 7; i++) {
-      const angle = 0.3 + i * 0.82;
-      const tx = Math.cos(angle) * 5, tz = Math.sin(angle) * 4.7;
-      const links = [['home','todo'],['home','note'],['home','friends'],['home','memories'],['note','friends'],['home','park']];
-      const origin = defs.find(node => node.id === id);
-      const nearLanding = links.filter(link => link.includes(id)).some(link => {
-        const neighbor = [...defs, PARK].find(node => node.id === link.find(value => value !== id));
-        const dx = neighbor.x - origin.x, dz = neighbor.z - origin.z, length = Math.hypot(dx, dz);
-        return tx * dx + tz * dz > 0 && Math.abs(tx * dz - tz * dx) / length < 1.65;
-      });
-      if (nearLanding) continue;
-      tree(
-        Math.cos(angle) * 5,
-        Math.sin(angle) * 4.7,
-        0.72 + (i % 3) * 0.16,
-        group,
-        i % 3 === 0 ? 1 : 0,
-      );
-    }
-    bench(3.8, 2.8, group, -0.6);
-    lamp(3.3, 2.6, group);
-    flowers(-3.7, 2.7, group, index % 2 ? "#eab5a5" : "#f2e5b1", 6);
-    flowers(3.2, -3, group, "#d1b4c9", 6);
-    fence(id === 'note' ? -2.5 : 2.5, 4.5, 5, group);
-  });
+
   river(
     [
       [-6, 1.4],
@@ -740,9 +701,9 @@ export function createWorld(
   cyl(0, 1.25, 0.85, "#ba8c70", -3.8, top + 2.05, 2.7, garden, 6);
   for (const [id, group] of Object.entries({ ...groups, park: garden })) {
     decorateBoardTile(group, BOARD_THEMES[id], { box, ball, cyl, mesh, top });
-    if (id === 'park') group.children.find(child => child.name === 'board-number-token').position.set(-.5, top + .12, -3.7);
   }
-  const expandedScenery = addExpandedScenery({groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
+  const originalScenery = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
+  const expandedScenery = addExpandedScenery({obstacles: originalScenery.obstacles,groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
   container.dataset.expandedScenery = JSON.stringify(expandedScenery);
   container.dataset.artStyle = "catan-inspired";
   container.dataset.landAreaMultiplier = String(landScale ** 2);

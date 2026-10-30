@@ -1,3 +1,4 @@
+import {createNaturalLayout, sceneryRandom} from './scenery-layout.js';
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -9,9 +10,8 @@ const THEMES = {
   memories: ['telescope', 'camp', 'lighthouse', 'rocks', 'library', 'sculpture', 'lookout', 'orchard'],
   park: ['pond', 'picnic', 'mushrooms', 'playground', 'well', 'greenhouse', 'fountain', 'party'],
 };
-const LINKS = [['home','todo'], ['home','note'], ['home','friends'], ['home','memories'], ['note','friends'], ['home','park']];
 
-export function addExpandedScenery({groups, nodes, scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
+export function addExpandedScenery({groups, nodes, obstacles = [], scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
   const summary = [];
   function pocket(kind, x, z, parent, angle) {
     const group = new T.Group();
@@ -159,45 +159,57 @@ export function addExpandedScenery({groups, nodes, scene, top, box, ball, cyl, m
     parent.name = 'expanded-island-dressing';
     island.add(parent);
     const node=nodes.find(node=>node.id===id), kinds=THEMES[id];
-    const exits=LINKS.filter(link=>link.includes(id)).map(link=>nodes.find(node=>node.id===link.find(value=>value!==id)));
-    const nearExit=(x,z,margin=2.15)=>exits.some(other=>{
-      const dx=other.x-node.x,dz=other.z-node.z,length=Math.hypot(dx,dz);
-      return x*dx+z*dz>0 && Math.abs(x*dz-z*dx)/length<margin;
-    });
+    const layout=createNaturalLayout({id,node,nodes,obstacles});
+    const random=sceneryRandom(id+'-meadow');
     const placed=[];
-    for(let i=0;i<18 && placed.length<10;i++) {
-      const angle=i*Math.PI/9+.16;
-      const radius=9.3+(i%2)*.35,x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;
-      if(nearExit(x,z)) continue;
-      const kind=kinds[placed.length%kinds.length];
-      pocket(kind,x,z,parent,angle);
+    layout.pockets.forEach((point,index)=>{
+      const kind=kinds[index%kinds.length];
+      pocket(kind,point.x,point.z,parent,point.heading);
       placed.push(kind);
-      curvedPath([[Math.cos(angle)*7.3,Math.sin(angle)*7.3],[x*.86,z*.86]],parent,.65);
-      const tx=Math.cos(angle+.11)*11.25,tz=Math.sin(angle+.11)*11.25;
-      if(!nearExit(tx,tz,1.9)) tree(tx,tz,.62+(i%3)*.12,parent,i%3===0?1:2);
-    }
-    // Hundreds of tiny flowers and tufts share two draw calls per island.
+      // Short, gently curved approaches avoid a repeated ring or spoke pattern.
+      const length=Math.hypot(point.x,point.z),dx=point.x/length,dz=point.z/length;
+      curvedPath([[point.x-dx*2.7+dz*.5,point.z-dz*2.7-dx*.5],
+        [point.x-dx*1.9,point.z-dz*1.9],
+        [point.x-dx*1.2,point.z-dz*1.2]],parent,.5);
+    });
+    layout.groves.forEach(point=>tree(point.x,point.z,point.scale,parent,point.type));
+    // Irregular meadow patches soften the spaces between buildings and groves.
+    const patches=layout.anchors.slice(0,3).map(anchor=>({x:anchor.x*.86,z:anchor.z*.86}));
+    patches.forEach((patch,index)=>{
+      const shape=new T.Shape();
+      for(let i=0;i<=12;i++) {
+        const angle=i*Math.PI/6,radius=1.7+random()*.6;
+        const x=Math.cos(angle)*radius,z=Math.sin(angle)*radius*.75;
+        if(i===0) shape.moveTo(x,z); else shape.lineTo(x,z);
+      }
+      const meadow=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshStandardMaterial({
+        color:id==='note'?'#c1b76e':['#98a777','#a6af7e','#8fa274'][index],roughness:1,side:T.DoubleSide,
+        transparent:true,opacity:.38,depthWrite:false,
+      }));
+      meadow.rotation.x=-Math.PI/2;meadow.position.set(patch.x,top+.008,patch.z);
+      meadow.userData.walkThrough=true;parent.add(meadow);
+    });
     const dummy=new T.Object3D();
     for(const [color,height] of [['#91a16f',.12],['#ead8ad',.1]]) {
       const dots=new T.InstancedMesh(new T.ConeGeometry(.075,height,4),new T.MeshStandardMaterial({color,roughness:1}),160);
-      dots.userData.walkThrough=true;
-      dots.name='meadow-flowers';
+      dots.userData.walkThrough=true;dots.name='meadow-flowers';
       for(let i=0;i<160;i++) {
-        const angle=i*2.39996, radius=6.2+(i%29)/29*5.25;
-        dummy.position.set(Math.cos(angle)*radius,top+.08,Math.sin(angle)*radius);
+        const patch=patches[i%patches.length],angle=random()*Math.PI*2,radius=Math.sqrt(random())*2.7;
+        dummy.position.set(patch.x+Math.cos(angle)*radius,top+.08,patch.z+Math.sin(angle)*radius);
         dummy.rotation.y=angle;dummy.updateMatrix();dots.setMatrixAt(i,dummy.matrix);
       }
       parent.add(dots);
     }
-    summary.push({id,pockets:placed});
+    summary.push({id,pockets:placed,positions:layout.pockets,trees:layout.groves.length,layout:'natural-clusters'});
   }
 
   // A continuous plain surrounds the expanded sea, with hills behind the coast.
   const mainland=new T.Group();mainland.name='outer-plains-and-hills';scene.add(mainland);
   cyl(86,88,.5,'#9baa7b',0,-1.65,1,mainland,48);
   cyl(67,68,.08,'#d5c69a',0,-1.34,1,mainland,6);
+  const landscapeRandom=sceneryRandom("outer-countryside");
   for(let i=0;i<28;i++) {
-    const angle=i*Math.PI/14,radius=71+(i%3)*3.8;
+    const angle=(i+landscapeRandom()*.6)*Math.PI/14,radius=70+landscapeRandom()*9;
     const x=Math.cos(angle)*radius,z=Math.sin(angle)*radius+1;
     const hill=mesh(new T.DodecahedronGeometry(1,1),['#81916d','#70866b','#99a57a'][i%3],mainland);
     hill.position.set(x,-.8,z);hill.scale.set(4.5+(i%3),2.3+(i%4)*1.2,4+(i%2)*2);

@@ -838,7 +838,8 @@ test('real scenery navigation keeps residents out of props and connected across 
     const data = window.navigationData, results = [];
     if (!data.nodes.every(node => node.walkRadius === 12 && node.bridgeHalfWidth === .94)) throw Error('All six islands and inter-island bridges must use their expanded walking bounds');
     if (!data.crossings.every(crossing => crossing.halfWidth === .84)) throw Error('River footbridges must also use doubled widths');
-    if (data.scenery.islands.length !== 6 || data.scenery.islands.some(island => island.pockets.length < 6)) throw Error('Each expanded island needs a full ring of themed scenery');
+    if (data.scenery.islands.length !== 6 || data.scenery.islands.some(island => island.pockets.length < 6 || island.layout !== 'natural-clusters')) throw Error('Each island needs naturally distributed themed scenery');
+    if (data.scenery.islands.some(island => Math.max(...island.positions.map(point => Math.hypot(point.x, point.z))) - Math.min(...island.positions.map(point => Math.hypot(point.x, point.z))) < 2)) throw Error('Scenery must extend into the island instead of forming another ring');
     if (data.scenery.seaRadius <= 47.3 || data.scenery.outerRadius <= data.scenery.seaRadius || data.scenery.hills < 20) throw Error('Expanded sea needs surrounding plains and hills');
     for (const seed of [1, 7, 23]) {
       let state = seed;
