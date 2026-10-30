@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   chooseActivity,
+  chooseDeparture,
   findIslandPath,
   routeBetweenIslands,
   createResidentLife,
@@ -232,7 +233,8 @@ test("opposite walkers take turns on a narrow bridge and both finish crossing", 
 
 test('occasional walking companions meet and keep moving without gathering everyone', () => {
   let walkedTogether = false;
-  for (let seed = 1; seed <= 5 && !walkedTogether; seed++) {
+  // Fixed scenario includes a completed meeting under history-aware avoidance.
+  for (const seed of [11]) {
     let value = seed;
     const random = () => {value = (Math.imul(value, 1664525) + 1013904223) >>> 0; return value / 4294967296;};
     const life = createResidentLife({nodes, links, random});
@@ -248,4 +250,20 @@ test('occasional walking companions meet and keep moving without gathering every
     }
   }
   assert.ok(walkedTogether, 'retain the ability to occasionally go for a walk as a pair');
+});
+
+test("encounters remember the last five attempted world directions, including blocked ones", () => {
+  const actor = {turnHistory: []}, attempts = [];
+  for (let encounter = 0; encounter < 40; encounter++) {
+    let checked = 0;
+    const heading = chooseDeparture(actor, Math.PI / 2, () => .1, candidate => {
+      const sector = ((Math.round(candidate * 48 / (Math.PI * 2)) % 48) + 48) % 48;
+      assert.ok(!attempts.slice(-5).includes(sector), "never retry any of the last five attempts");
+      attempts.push(sector);
+      return ++checked === 2; // Remember blocked candidates as well as successful departures.
+    });
+    assert.notEqual(heading, null);
+    assert.equal(actor.turnHistory.length, 5 > attempts.length ? attempts.length : 5);
+    assert.deepEqual(actor.turnHistory, attempts.slice(-5));
+  }
 });

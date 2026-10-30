@@ -30,6 +30,26 @@ export function findIslandPath(from, to, links) {
   }
   throw new Error(`No walking path between ${from} and ${to}`);
 }
+// Store attempted world directions, including blocked candidates, across encounters.
+export function chooseDeparture(actor, away, random, canDepart) {
+  const history = actor.turnHistory ||= [];
+  const directions = Array.from({ length: 48 }, (_, sector) => ({
+    sector, heading: sector * Math.PI * 2 / 48,
+  })).filter(({ heading }) => Math.cos(heading - away) >= Math.cos(.55));
+  const preferred = away + (random() - .5) * 1.1;
+  const angleDistance = heading => Math.abs(Math.atan2(Math.sin(heading - preferred), Math.cos(heading - preferred)));
+  directions.sort((a, b) => angleDistance(a.heading) - angleDistance(b.heading));
+  directions.unshift({heading: preferred,
+    sector: ((Math.round(preferred * 48 / (Math.PI * 2)) % 48) + 48) % 48});
+  while (directions.length) {
+    const candidate = directions.shift();
+    if (history.includes(candidate.sector)) continue;
+    history.push(candidate.sector);
+    if (history.length > 5) history.shift();
+    if (canDepart(candidate.heading)) return candidate.heading;
+  }
+  return null;
+}
 export const RESIDENT_SPACING = 1.18;
 export const PARK = {
   id: "park",
@@ -170,6 +190,7 @@ export function createResidentLife({
       swingAngle: 0,
       wait: 0,
       blockedTime: 0,
+      turnHistory: [],
     });
   }
   const bridges = links.map(([aId, bId]) => {
@@ -536,26 +557,22 @@ export function createResidentLife({
             (actor.target?.ignore && !navigation.walkable(actor))
           )
             continue;
-          const away = Math.atan2(actor.x - other.x, actor.z - other.z),
-            variation = (random() - 0.5) * 1.1;
-          for (const offset of [variation, -variation, 0]) {
-            const heading = away + offset,
-              point = {
-                x: actor.x + Math.sin(heading) * 1.4,
-                z: actor.z + Math.cos(heading) * 1.4,
-              };
-            if (
-              !navigation.clearSegment(actor, point) ||
-              bridges.some((bridge) => inBridge(point, bridge, 1.5, 1))
-            )
-              continue;
+          const away = Math.atan2(actor.x - other.x, actor.z - other.z);
+          const heading = chooseDeparture(actor, away, random, (heading) => {
+            const point = {
+              x: actor.x + Math.sin(heading) * 1.4,
+              z: actor.z + Math.cos(heading) * 1.4,
+            };
+            return navigation.clearSegment(actor, point) &&
+              !bridges.some((bridge) => inBridge(point, bridge, 1.5, 1));
+          });
+          if (heading !== null) {
             actor.departure = { heading };
             actor.route = [];
             actor.routeIndex = 0;
             actor.target = null;
             actor.goalMode = mode;
             actor.turnCooldown = elapsed + 5;
-            break;
           }
         }
       }
@@ -775,7 +792,7 @@ export function createResidentLife({
         }
         if (actor.wait <= 0) begin(actor);
       } else if (actor.state === "chatting") {
-        actor.yOffset = PARK.chatBench.height - 0.85 * 0.43;
+        actor.yOffset = 0; // The renderer aligns each shaped torso with the seat surface.
         actor.heading =
           PARK.chatBench.heading +
           (actor.slot ? -0.22 : 0.22) +

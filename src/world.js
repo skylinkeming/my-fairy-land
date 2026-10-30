@@ -1,3 +1,4 @@
+import { seatedRootHeight } from "./resident-pose.js";
 import * as T from "three";
 import { createDinosaur } from "./dinosaur.js";
 import { createFrog } from "./frog.js";
@@ -1124,6 +1125,12 @@ export function createWorld(
                 ? Math.sin(actor.walkTime * 8 + j * Math.PI) * 0.09
                 : 0);
         });
+        if (seated) {
+          const seatSurface = actor.state === "chatting"
+            ? top + PARK.chatBench.height + .075 / 2
+            : top + 2.8 - Math.cos(actor.swingAngle) * 1.75 + .1 / 2;
+          r.g.position.y = seatedRootHeight(r.g, seatSurface);
+        }
         r.arms.forEach((arm, j) => {
           arm.rotation.x = seated
             ? (actor.state === "chatting" ? -.35 : -1.1)

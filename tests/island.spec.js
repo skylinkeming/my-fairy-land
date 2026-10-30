@@ -811,6 +811,24 @@ test('real scenery navigation keeps residents out of props and connected across 
       import {createWorld} from '/src/world.js';
       import {icon} from '/src/ui/markup.js';
       const runtime = createWorld(document.querySelector('#world'), () => {}, icon, () => {}, {isUiCovered: () => true});
+      const {seatedRootHeight} = await import('/src/resident-pose.js');
+      const {applyResidentShape} = await import('/src/resident-shape.js');
+      const {Box3} = await import('/node_modules/.vite/deps/three.js');
+      for (let index = 0; index < 6; index++) {
+        for (const shape of [{}, {size: 1.25, bodyHeight: 1.35}, {size: .75, bodyHeight: .75}]) {
+          const root = runtime.getResidentTemplate(index);
+          applyResidentShape(root, shape);
+          root.rotation.y = -.3; root.position.y = 1.7;
+          for (const surface of [2.1375, 2.8 - Math.cos(.4) * 1.75 + .05]) {
+            root.position.y = seatedRootHeight(root, surface);
+            root.updateWorldMatrix(true, true);
+            const bounds = new Box3();
+            root.children.filter(part => ['body', 'pillow'].includes(part.userData.shapePart))
+              .forEach(part => bounds.expandByObject(part, true));
+            if (Math.abs(bounds.min.y - surface) > .00001) throw Error('Seat alignment failed for resident ' + index);
+          }
+        }
+      }
       window.navigationData = runtime.getNavigationData(); runtime.dispose();
     </script>`}));
   await page.goto('/navigation-check');

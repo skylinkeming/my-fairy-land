@@ -44,3 +44,23 @@ for (const [name, create] of [['frog', createFrog], ['dinosaur', createDinosaur]
     resident.dispose();
   });
 }
+
+
+test('seated shaped torsos rest on the bench surface at different sizes and headings', async () => {
+  const {seatedRootHeight} = await import('../src/resident-pose.js');
+  for (const create of [createFrog, createDinosaur]) {
+    for (const shape of [{}, {size: 1.25, bodyHeight: 1.35}, {size: .75, bodyHeight: .75}]) {
+      const {g} = create(art);
+      applyResidentShape(g, shape);
+      g.position.set(2, 1.7, -3); g.rotation.y = -.52;
+      const seatSurface = 2.1375;
+      for (let frame = 0; frame < 3; frame++) {
+        g.position.y = seatedRootHeight(g, seatSurface);
+        g.updateWorldMatrix(true, true);
+        const bounds = new T.Box3();
+        g.children.filter(p => ['body', 'pillow'].includes(p.userData.shapePart)).forEach(p => bounds.expandByObject(p, true));
+        assert.ok(Math.abs(bounds.min.y - seatSurface) < 1e-6, 'torso bottom touches the top of the seat');
+      }
+    }
+  }
+});
