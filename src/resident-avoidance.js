@@ -25,13 +25,13 @@ export function steerRight(actor, actors, direction) {
   if (encounter) {
     const other = actors.find(other => other.id === encounter.other);
     const ahead = other && (other.x - actor.x) * encounter.x + (other.z - actor.z) * encounter.z;
-    if (!other || distance(actor, other) > 5 || (ahead < -.3 && distance(actor, other) > 1.4)) {
+    if (!other || (actor.target?.roomId && actor.target.roomId===other.target?.roomId) || distance(actor, other) > 5 || (ahead < -.3 && distance(actor, other) > 1.4)) {
       actor.avoidance = null;
       encounter = null;
     }
   }
   if (!encounter) {
-    const other = actors.filter(other => other !== actor && other.id !== actor.partner && distance(actor, other) < 5)
+    const other = actors.filter(other => other !== actor && other.id !== actor.partner && !(actor.target?.roomId && actor.target.roomId===other.target?.roomId) && distance(actor, other) < 5)
       .sort((a, b) => distance(actor, a) - distance(actor, b))
       .find(other => predictsCollision(actor, other, direction, walkingDirection(other)));
     if (other) encounter = actor.avoidance = {other: other.id, ...direction};

@@ -33,9 +33,9 @@ export function createNaturalLayout({id, node, nodes, obstacles = [], crossings 
     return {x:Math.cos(angle)*radius,z:Math.sin(angle)*radius};
   }).filter(point=>free(point));
   const focus = {home:[6,-4],todo:[-4,4],note:[-2,5.5],friends:[-5,3],memories:[5,5],park:[6.8,6.3]}[id] || [5,5];
-  const landmarkPoint = candidates.filter(point=>free(point,2.3) && Math.hypot(point.x,point.z)<9.5)
+  const landmarkPoint = candidates.filter(point=>free(point,(id==='todo'||id==='friends')?3:2.3) && Math.hypot(point.x,point.z)<9.5)
     .sort((a,b)=>Math.hypot(a.x-focus[0],a.z-focus[1])-Math.hypot(b.x-focus[0],b.z-focus[1]))[0];
-  const landmark = landmarkPoint ? {...landmarkPoint, radius:id==='park'?2.7:2.3, heading:0} : null;
+  const landmark = landmarkPoint ? {...landmarkPoint, radius:id==='park'?2.7:(id==='todo'||id==='friends')?3.6:2.3, heading:0} : null;
   const pockets = [];
   // Different seeds and asymmetric focus points keep each island distinct.
   const rotation=random()*Math.PI*2;

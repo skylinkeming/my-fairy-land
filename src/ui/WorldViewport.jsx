@@ -218,6 +218,7 @@ export function WorldViewport({
           <p>{visit?.greeting}</p>
         </div>
         <small>拖曳旋轉視角，從各個方向看看我 ♡</small>
+        <div className="resident-dialog-actions">
         <button
           type="button"
           onClick={() => worldRef.current?.endResidentVisit()}
@@ -230,6 +231,13 @@ export function WorldViewport({
         >
           調整造型
         </button>
+        <button type="button" onClick={()=>{
+          if(!worldRef.current?.goForCoffee(visit.index)) setVisit(value=>({...value,greeting:'咖啡廳暫時沒有空位，等朋友離開再來吧。'}));
+        }}>去喝杯咖啡</button>
+        <button type="button" onClick={()=>{
+          if(!worldRef.current?.goHome(visit.index)) setVisit(value=>({...value,greeting:'家裡的座位正有人使用，等一下再回去休息吧。'}));
+        }}>回家休息</button>
+        </div>
       </section>
     </div>
   );

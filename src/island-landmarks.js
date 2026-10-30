@@ -1,3 +1,4 @@
+import {buildEnterableBuilding} from './enterable-buildings.js';
 import * as T from 'three';
 
 export const ISLAND_THEMES = {
@@ -9,7 +10,7 @@ export const ISLAND_THEMES = {
   park: {name:'湖畔公園', landmark:'lakeside-park'},
 };
 
-export function buildIslandLandmark({id, point, parent, top, box, ball, cyl, animations=[], rivers=[], footbridges=[]}) {
+export function buildIslandLandmark({id, point, parent, top, box, ball, cyl, animations=[], buildings=[], rivers=[], footbridges=[]}) {
   const root=new T.Group();root.name=`landmark-${ISLAND_THEMES[id].landmark}`;
   root.position.set(point.x,top,point.z);parent.add(root);
   const wood='#a5825d',cream='#eee1c5',stone='#abae9d',green='#7c9c88',rose='#c58e85';
@@ -19,15 +20,10 @@ export function buildIslandLandmark({id, point, parent, top, box, ball, cyl, ani
   function group(name,x=0,z=0,solid=true) {
     const g=new T.Group();g.name=name;g.position.set(x,0,z);g.userData.walkObstacle=solid;root.add(g);return g;
   }
-  function cottage(g,color=green,width=2.7,depth=1.9) {
-    b(width,1.65,depth,cream,0,.86,0,g);
-    const roof=c(0,width*.77,1,color,0,2.1,0,g,4);roof.scale.z=depth/width;roof.rotation.y=Math.PI/4;
-    b(.45,.85,.06,wood,0,.45,depth/2+.03,g);
-    for(const side of [-1,1]) {
-      b(.53,.53,.08,'#9dbcb5',side*width*.31,1,depth/2+.06,g);
-      b(.58,.05,.13,cream,side*width*.31,1,depth/2+.13,g);
-    }
-    b(.32,.55,.32,stone,width*.28,2.47,-.2,g);
+  function cottage(g,color=green) {
+    g.userData.walkObstacle=false;
+    buildings.push(buildEnterableBuilding({id:`${id}-interior`,island:id,type:id==='friends'?'cafe':'workshop',
+      name:id==='friends'?'花園咖啡廳':'森林工坊',parent:g,baseY:0,color,box,ball,cyl}));
   }
   function flowerBed(x,z,color=rose,width=1.25) {
     const g=group('flower-border',x,z);
@@ -69,12 +65,12 @@ export function buildIslandLandmark({id, point, parent, top, box, ball, cyl, ani
     }
   } else if(id==='todo') {
     cottage(group('workshop-cottage',0,-.35),'#839b83');
-    const workbench=group('outdoor-workbench',.7,1.7);
+    const workbench=group('outdoor-workbench',3.8,2.8);
     b(1.5,.12,.65,wood,0,.7,0,workbench);
     for(const side of [-1,1]) b(.1,.65,.55,wood,side*.55,.35,0,workbench);
     for(let i=0;i<3;i++) b(.24,.18,.24,'#d4c6a1',-.45+i*.4,.86,0,workbench);
-    flowerBed(-1.35,1.65,'#b3bc79',1.05);
-    const shed=group('stacked-firewood',1.75,-.6);
+    flowerBed(-1.6,3.5,'#b3bc79',1.05);
+    const shed=group('stacked-firewood',3.4,-.6);
     for(let i=0;i<7;i++) {const log=c(.13,.13,.75,wood,(i%3)*.22-.2,.17+Math.floor(i/3)*.23,0,shed,8);log.rotation.x=Math.PI/2;}
   } else if(id==='note') {
     const mill=group('farm-windmill');
@@ -93,9 +89,9 @@ export function buildIslandLandmark({id, point, parent, top, box, ball, cyl, ani
     }
   } else if(id==='friends') {
     cottage(group('flower-garden-cafe',0,-.6),'#b58e89',3.1,1.8);
-    b(3.2,.12,.85,'#cba2a0',0,1.55,.72);
-    table(-1.1,1.7,true);table(1.2,1.7);
-    flowerBed(-1.9,-.7,'#dca7b7',.85);flowerBed(1.9,-.7,'#dec67f',.85);
+    b(5.7,.12,.95,'#cba2a0',0,2.45,2.2);
+    table(-2.05,3.8,true);table(2.05,3.8);
+    flowerBed(-3.4,-.7,'#dca7b7',.85);flowerBed(3.4,-.7,'#dec67f',.85);
   } else if(id==='memories') {
     const tower=group('coastal-lighthouse');
     c(.54,.85,3.7,cream,0,1.87,0,tower,12);
@@ -137,9 +133,8 @@ export function buildIslandLandmark({id, point, parent, top, box, ball, cyl, ani
 export function addRiversideWatermill({parent,top,box,ball,cyl,animations}) {
   const g=new T.Group();g.name='riverside-watermill';g.position.set(3.7,top,.75);parent.add(g);
   const body=new T.Group();body.userData.walkObstacle=true;g.add(body);
-  box(1.5,1.2,1.25,'#e6d9bb',0,.63,0,body);
-  const roof=cyl(0,1.3,.65,'#8b9f91',0,1.52,0,body,4);roof.rotation.y=Math.PI/4;roof.scale.z=.8;
-  box(.35,.65,.06,'#a1815f',0,.35,.66,body);
+  for(const x of [-.65,.65]) box(.1,1.3,.1,'#a1815f',x,.65,-.3,body);
+  box(1.6,.1,1.25,'#8b9f91',0,1.35,0,body);
   const wheel=new T.Group();wheel.position.set(.95,.68,1.25);wheel.userData.sceneryAnimated=true;wheel.userData.walkThrough=true;g.add(wheel);
   for(const side of [-1,1]) {const ring=new T.Mesh(new T.TorusGeometry(.65,.045,6,24),new T.MeshStandardMaterial({color:'#a1815f'}));ring.rotation.y=Math.PI/2;ring.position.x=side*.2;wheel.add(ring);}
   for(let i=0;i<10;i++) {const angle=i*Math.PI/5;const paddle=box(.48,.13,.32,'#ba9b73',0,Math.cos(angle)*.62,Math.sin(angle)*.62,wheel);paddle.rotation.x=angle;}

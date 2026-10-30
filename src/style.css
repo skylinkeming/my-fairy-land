@@ -3490,3 +3490,6 @@ body.resident-editor-open { overflow: hidden; }
 /* React owns controls; Three.js owns only its canvas and projected label host. */
 .resident-art > span:first-child { display: contents; }
 .illustration-host { position: absolute; inset: 0; }
+
+.resident-dialog-actions {display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:12px;}
+.resident-dialog-actions button {margin:0;padding:8px 13px;}

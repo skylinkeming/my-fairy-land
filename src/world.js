@@ -1,3 +1,4 @@
+import {buildEnterableBuilding,clearBuildingFootprints,roomContains} from './enterable-buildings.js';
 import {addRiversideWatermill} from './island-landmarks.js';
 import { addExpandedScenery, batchExpandedScenery, addConnectedSceneryPaths } from "./expanded-scenery.js";
 import { seatedRootHeight } from "./resident-pose.js";
@@ -24,7 +25,8 @@ export function createWorld(
   onReminder = () => onSelect("todo"),
   { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
 ) {
-  const sceneryAnimations = [];
+  const sceneryAnimations = [], buildingViews = [];
+  let showAllInteriors = false;
   const PARK = {...BASE_PARK, z: BASE_PARK.z * 2, walkRadius: 12, bridgeHalfWidth: .94};
   const canvas = container.querySelector("canvas"),
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -58,6 +60,7 @@ export function createWorld(
   function stopFollowing() {
     focusedResident = null;
     delete container.dataset.focusedResident;
+    delete container.dataset.followedResident;
   }
   controls.addEventListener("start", stopFollowing);
   scene.add(new T.AmbientLight(0xfff2d6, 1.55));
@@ -270,48 +273,11 @@ export function createWorld(
   function path(x, z, w, d, p) {
     box(w, 0.035, d, "#c9ad77", x, top + 0.01, z, p);
   }
-  function house(parent, { x = 0, z = 0, w = 2.2, h = 1.7, d = 1.7 } = {}) {
-    const group = new T.Group();
-    group.userData.walkObstacle = true;
-    group.position.set(x, top, z);
-    parent.add(group);
-    const color = parent.userData.playerColor || "#a64331";
-    const body = box(w, h * 0.75, d, color, 0, h * 0.375, 0, group);
-    const shape = new T.Shape();
-    shape.moveTo(-w / 2 - 0.04, 0);
-    shape.lineTo(0, h * 0.55);
-    shape.lineTo(w / 2 + 0.04, 0);
-    shape.closePath();
-    const roof = mesh(
-      new T.ExtrudeGeometry(shape, { depth: d + 0.08, bevelEnabled: false }),
-      color,
-      group,
-    );
-    roof.position.set(0, h * 0.75, -d / 2 - 0.04);
-    for (const piece of [body, roof]) {
-      const edge = new T.LineSegments(
-        new T.EdgesGeometry(piece.geometry),
-        new T.LineBasicMaterial({
-          color: new T.Color(color).multiplyScalar(0.65),
-          transparent: true,
-          opacity: 0.4,
-        }),
-      );
-      piece.add(edge);
-    }
-    box(
-      w * 0.19,
-      h * 0.34,
-      0.025,
-      new T.Color(color).multiplyScalar(0.65).getStyle(),
-      0,
-      h * 0.17,
-      d / 2 + 0.018,
-      group,
-    );
-    if (parent === groups.home) {
-      box(w * 0.48, h * 1.05, d * 0.7, color, w * 0.58, h * 0.525, -0.1, group);
-    }
+  // Main homes are placed together after their former miniature gardens are known.
+  const plannedHomes=new Set();
+  function house(parent) {
+    const id=Object.entries(groups).find(([,group])=>group===parent)?.[0];
+    if(id==='home'||id==='note') plannedHomes.add(id);
   }
   function bench(x, z, p, rot = 0, width = 1.1) {
     const g = new T.Group();
@@ -723,8 +689,26 @@ export function createWorld(
   for (const [id, group] of Object.entries({ ...groups, park: garden })) {
     decorateBoardTile(group, BOARD_THEMES[id], { box, ball, cyl, mesh, top });
   }
+  for(const [island,type,name,x,z,heading] of [
+    ['home','home','河畔的家',0,-1.6,0],
+    ['note','library','田園閱讀小屋',0,-1.5,0],
+    ['memories','cabin','海邊休憩小屋',-4,3.4,0],
+    ['park','teahouse','公園茶屋',-6,-6,Math.PI/2],
+  ]) {
+    if((island==='home'||island==='note')&&!plannedHomes.has(island)) continue;
+    buildingViews.push(buildEnterableBuilding({id:`${island}-${type}`,island,type,name,parent:island==='park'?garden:groups[island],x,z,heading,
+      baseY:top,box,ball,cyl,batchRoot:true,color:island==='home'?'#bd8e81':'#8ea296'}));
+  }
+  clearBuildingFootprints({...groups,park:garden},buildingViews,footbridgeDefinitions.map(item=>item.group));
+  const coreRoomData=buildingViews.map(building=>building.describe());
+  const layoutReservations=coreRoomData.flatMap(room=>{
+    const swapped=Math.abs(Math.sin(room.heading))>.5;
+    return [{id:`${room.id}-garden-reserve`,minX:room.center.x-(swapped?room.depth:room.width)/2-.3,maxX:room.center.x+(swapped?room.depth:room.width)/2+.3,
+      minZ:room.center.z-(swapped?room.width:room.depth)/2-.3,maxZ:room.center.z+(swapped?room.width:room.depth)/2+.3},
+      {id:`${room.id}-door-reserve`,minX:room.exit.x-1.3,maxX:room.exit.x+1.3,minZ:room.exit.z-1.3,maxZ:room.exit.z+1.3}];
+  });
   const originalScenery = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
-  const expandedScenery = addExpandedScenery({animations:sceneryAnimations,rivers:riverDefinitions,footbridges:footbridgeDefinitions,obstacles: originalScenery.obstacles, crossings: originalScenery.crossings,groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
+  const expandedScenery = addExpandedScenery({buildings:buildingViews,animations:sceneryAnimations,rivers:riverDefinitions,footbridges:footbridgeDefinitions,obstacles: [...originalScenery.obstacles,...layoutReservations], crossings: originalScenery.crossings,groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
   container.dataset.expandedScenery = JSON.stringify(expandedScenery);
   container.dataset.artStyle = "catan-inspired";
   container.dataset.landAreaMultiplier = String(landScale ** 2);
@@ -791,11 +775,14 @@ export function createWorld(
   try {
     previousActivity = sessionStorage.getItem("little-island-last-activity");
   } catch {}
+  clearBuildingFootprints({...groups,park:garden},buildingViews,footbridgeDefinitions.map(item=>item.group));
+  const roomData=buildingViews.map(building=>building.describe());
   const navigationData = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
   // The pavilion is reserved scenery, not a shortcut through its posts.
   navigationData.obstacles.push({id: 'park-pavilion', island: 'park', minX: -4.95, maxX: -2.65, minZ: PARK.z + 1.55, maxZ: PARK.z + 3.85});
   const life = createResidentLife({
     ...navigationData,
+    buildings:roomData,
     nodes: [...defs, PARK],
     links: [
       ["home", "todo"],
@@ -922,6 +909,13 @@ export function createWorld(
   scene.add(dinosaur.g);
   residents.push(dinosaur);
   const residentTemplates = residents.map(resident => resident.g.clone(true));
+  residents.forEach(resident=>{
+    const cup=new T.Group();cup.name='resident-coffee-cup';cup.visible=false;resident.g.add(cup);
+    cyl(.095,.085,.17,'#f0e4ce',0,0,0,cup,16);
+    cyl(.077,.077,.012,'#785a43',0,.09,0,cup,16);
+    const handle=mesh(new T.TorusGeometry(.055,.015,5,12),'#f0e4ce',cup);handle.position.x=.1;handle.rotation.y=Math.PI/2;
+    resident.cup=cup;
+  });
   function setResidentShapes(settings) {
     frameDirty = true;
     residents.forEach((resident, index) => applyResidentShape(resident.g, settings[RESIDENT_SHAPE_IDS[index]]));
@@ -1065,7 +1059,16 @@ export function createWorld(
     lastFrameTime = t;
     const activityTime = reduced ? 0 : t;
     const previousMode = life.mode;
-    if (!reduced) life.update(dt);
+    const manualMotion=reduced && life.hasManualVisits;
+    if (!reduced || manualMotion) life.update(dt,manualMotion);
+    const openBuildings=[];
+    for(let index=0;index<buildingViews.length;index++) {
+      const open=showAllInteriors || life.actors.some(actor=>roomContains(roomData[index],actor,.12));
+      buildingViews[index].roof.visible=!open;buildingViews[index].upper.visible=!open;
+      if(open) openBuildings.push(roomData[index].id);
+    }
+    container.dataset.openBuildings=JSON.stringify(openBuildings);
+    container.dataset.indoorResidents=JSON.stringify(life.actors.filter(actor=>actor.state==='indoors').map(actor=>actor.id));
     if (previousMode !== life.mode) updateActivityBadge();
     {
       residents.forEach((r, i) => {
@@ -1083,12 +1086,14 @@ export function createWorld(
             bridgeLift = (.23 + Math.max(0, Math.cos(along * Math.PI / (deckHalfLength*2))) * .15) * ramp;
           }
         }
-        r.g.position.set(actor.x, top + actor.yOffset + bridgeLift, actor.z);
+        const room=roomData.find(room=>roomContains(room,actor));
+        const floorLift=room?room.floorY-top:0;
+        r.g.position.set(actor.x, top + actor.yOffset + bridgeLift + floorLift, actor.z);
         r.g.rotation.set(0, actor.heading, 0);
-        const seated = actor.state === "swinging" || actor.state === "chatting";
+        const seated = actor.state === "swinging" || actor.state === "chatting" || actor.state === "indoors";
         const walking = actor.state === "walking" || actor.state === "strolling";
         r.feet.forEach((foot, j) => {
-          foot.position.y = seated ? 0.23 : (foot.userData.restY ?? 0.1);
+          foot.position.y = actor.state==='indoors' ? .08 : seated ? 0.23 : (foot.userData.restY ?? 0.1);
           foot.position.z = seated
             ? 0.3
             : (foot.userData.restZ ?? 0.08) +
@@ -1097,7 +1102,7 @@ export function createWorld(
                 : 0);
         });
         if (seated) {
-          const seatSurface = actor.state === "chatting"
+          const seatSurface = actor.state==='indoors' ? actor.target.seatHeight : actor.state === "chatting"
             ? top + PARK.chatBench.height + .075 / 2
             : top + 2.8 - Math.cos(actor.swingAngle) * 1.75 + .1 / 2;
           r.g.position.y = seatedRootHeight(r.g, seatSurface);
@@ -1115,6 +1120,13 @@ export function createWorld(
                 ? Math.sin(activityTime * 1.4 + actor.phase + j) * .12
                 : 0;
         });
+        r.cup.visible=actor.state==='indoors';
+        if(r.cup.visible) {
+          const sip=reduced?0:Math.pow(Math.max(0,Math.sin(actor.sipTime*.95)),4);
+          r.cup.position.set(.28,.7+sip*.31,.53+sip*.03);
+          r.cup.rotation.x=-sip*.25;
+          if(r.arms[1]) r.arms[1].rotation.x=-.55-sip*.65;
+        }
         if (!reduced && !life.isPaused(i) && t < greetUntil && i === greetIndex && !seated) {
           r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.14;
           r.arms[1].rotation.z = -1.2 + Math.sin(t * 7) * 0.4;
@@ -1208,7 +1220,7 @@ export function createWorld(
     const p = new T.Vector3(0, 1.1, PARK.z).project(camera);
     hl.style.transform = `translate(-50%,0) translate(${(p.x * 0.5 + 0.5) * width}px,${(-p.y * 0.5 + 0.5) * height}px)`;
     // Static scenes need no GPU redraw until a command, resize or camera move.
-    if (!reduced || cameraChanged || frameDirty) {
+    if (!reduced || manualMotion || cameraChanged || frameDirty) {
       renderer.render(scene, camera);
       frameDirty = false;
     }
@@ -1295,7 +1307,25 @@ export function createWorld(
       frameDirty = true;
       todoBalloon.visible = count > 0;
     },
-    getNavigationData() {return {nodes: [...defs, PARK], links: [["home","todo"],["home","note"],["home","friends"],["home","memories"],["note","friends"],["home","park"]], ...navigationData, scenery: expandedScenery};},
+    getNavigationData() {return {nodes: [...defs, PARK], links: [["home","todo"],["home","note"],["home","friends"],["home","memories"],["note","friends"],["home","park"]], ...navigationData, buildings:roomData, scenery: expandedScenery};},
+    setInteriorsVisible(enabled) {showAllInteriors=Boolean(enabled);frameDirty=true;},
+    goForCoffee(index) {
+      if(!life.visitBuilding(index,'cafe')) return false;
+      finishResidentVisit();frameDirty=true;focusedResident=index;
+      const actor=life.actors[index],target=new T.Vector3(actor.x,.9,actor.z);
+      controls.target.copy(target);camera.position.copy(target).add(new T.Vector3(30,30,40));
+      camera.zoom=7;camera.updateProjectionMatrix();controls.update();
+      container.dataset.followedResident=String(index);
+      return true;
+    },
+    goHome(index) {
+      if(!life.visitBuilding(index,'home')) return false;
+      finishResidentVisit();frameDirty=true;focusedResident=index;
+      const actor=life.actors[index],target=new T.Vector3(actor.x,.9,actor.z);
+      controls.target.copy(target);camera.position.copy(target).add(new T.Vector3(30,30,40));
+      camera.zoom=7;camera.updateProjectionMatrix();controls.update();
+      container.dataset.followedResident=String(index);return true;
+    },
     getResidentActivities() {
       return life.descriptions();
     },

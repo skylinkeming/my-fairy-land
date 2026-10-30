@@ -4,15 +4,15 @@ import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
 const THEMES = {
-  home: ['bakery', 'orchard', 'greenhouse', 'picnic', 'well', 'cart', 'orchard', 'bakery'],
-  todo: ['workshop', 'vegetable', 'greenhouse', 'woodpile', 'beehive', 'cart', 'mushrooms', 'picnic'],
-  note: ['wheat', 'wheat', 'orchard', 'library', 'greenhouse', 'wheat', 'cart', 'picnic'],
+  home: ['bakery', 'orchard', 'vegetable', 'picnic', 'well', 'cart', 'orchard', 'bakery'],
+  todo: ['workshop', 'vegetable', 'vegetable', 'woodpile', 'beehive', 'cart', 'mushrooms', 'picnic'],
+  note: ['wheat', 'wheat', 'orchard', 'library', 'vegetable', 'wheat', 'cart', 'picnic'],
   friends: ['flowerbed', 'cafe-table', 'picnic', 'playground', 'party', 'flowerbed', 'picnic', 'bakery'],
   memories: ['camp', 'camp', 'lookout', 'telescope', 'rocks', 'picnic', 'camp', 'sculpture'],
   park: ['flowerbed', 'picnic', 'playground', 'mushrooms', 'flowerbed', 'well', 'picnic', 'playground'],
 };
 
-export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [], animations = [], rivers = [], footbridges = [], scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
+export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [], buildings = [], animations = [], rivers = [], footbridges = [], scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
   const summary = [];
   function pocket(kind, x, z, parent, angle) {
     const group = new T.Group();
@@ -177,7 +177,7 @@ export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [
     const node=nodes.find(node=>node.id===id), kinds=THEMES[id];
     const layout=createNaturalLayout({id,node,nodes,obstacles,crossings});
     const random=sceneryRandom(id+'-meadow');
-    const landmark=layout.landmark && buildIslandLandmark({id,point:layout.landmark,parent,top,box,ball,cyl,animations,rivers,footbridges});
+    const landmark=layout.landmark && buildIslandLandmark({id,point:layout.landmark,parent,top,box,ball,cyl,animations,buildings,rivers,footbridges});
     addCoastalDetails({id,parent,top,box,ball,cyl});
     const placed=[];
     layout.pockets.forEach((point,index)=>{
@@ -245,7 +245,7 @@ export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [
 export function batchExpandedScenery(scene) {
   const roots = [];
   scene.traverse(object => {
-    if (['expanded-island-dressing', 'outer-plains-and-hills', 'expanded-island-paths', 'riverside-watermill'].includes(object.name)) roots.push(object);
+    if (['expanded-island-dressing', 'outer-plains-and-hills', 'expanded-island-paths', 'riverside-watermill', 'enterable-core-building'].includes(object.name)) roots.push(object);
   });
   for (const root of roots) {
     root.updateWorldMatrix(true, true);

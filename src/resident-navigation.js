@@ -206,9 +206,9 @@ export function createResidentNavigation({
     );
     return available.length ? { ...points[available[0]] } : null;
   }
-  function sample(island, random, avoid = []) {
+  function sample(island, random, avoid = [], allow = () => true) {
     const available = candidates(island).filter((index) =>
-      avoid.every((other) => distance(points[index], other) >= 1.4),
+      allow(points[index]) && avoid.every((other) => distance(points[index], other) >= 1.4),
     );
     return available.length
       ? {

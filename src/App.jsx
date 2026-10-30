@@ -162,6 +162,7 @@ export default function App() {
     [photo, setPhoto] = useState(null);
   const [expanded, setExpanded] = useState(false),
     [pan, setPan] = useState(false),
+    [interiors, setInteriors] = useState(false),
     [ready, setReady] = useState(false);
   const [activity, setActivity] = useState({ label: "娃娃們正在準備出門…" }),
     [toast, setToast] = useState(null),
@@ -197,6 +198,7 @@ export default function App() {
     },
     [notify],
   );
+  useEffect(() => {worldRef.current?.setInteriorsVisible(interiors);}, [interiors,ready]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 3500);
@@ -459,6 +461,16 @@ export default function App() {
                 }}
               >
                 看看娃娃 ♡
+              </button>
+              <button
+                id="view-interiors"
+                className="map-expand-button"
+                aria-pressed={interiors}
+                disabled={!ready}
+                title="查看家具；有人進屋時會自動掀開屋頂"
+                onClick={()=>setInteriors(!interiors)}
+              >
+                {interiors ? "自動屋頂" : "查看室內"}
               </button>
               <button
                 id="sound"

@@ -838,6 +838,14 @@ test('real scenery navigation keeps residents out of props and connected across 
     const data = window.navigationData, results = [];
     if (!data.nodes.every(node => node.walkRadius === 12 && node.bridgeHalfWidth === .94)) throw Error('All six islands and inter-island bridges must use their expanded walking bounds');
     if (!data.crossings.every(crossing => crossing.halfWidth === .84)) throw Error('River footbridges must also use doubled widths');
+    if (data.buildings.length !== 6 || !data.buildings.some(room=>room.type==='cafe')) throw Error('All six islands need a usable indoor building');
+    const check = createResidentLife({...data,count:1,random:()=>.1});
+    for(const room of data.buildings) {
+      if(!check.navigation.walkable(room.exit)) throw Error('Blocked door outside '+room.name+' at '+JSON.stringify(room.exit)+' by '+data.obstacles.filter(o=>o.kind!=='river' && (o.radius!==undefined?Math.hypot(o.x-room.exit.x,o.z-room.exit.z)<o.radius+.46:Math.hypot(Math.max(o.minX-room.exit.x,0,room.exit.x-o.maxX),Math.max(o.minZ-room.exit.z,0,room.exit.z-o.maxZ))<.46)).map(o=>o.id).join(','));
+      for(const seat of room.seats) {
+        if(!check.navigation.route(room.exit,seat.approach) || !check.navigation.clearSegment(seat.approach,seat.point,seat.id)) throw Error('Unreachable indoor seat '+room.name);
+      }
+    }
     if (data.scenery.islands.length !== 6 || data.scenery.islands.some(island => island.pockets.length < 6 || island.layout !== 'themed-villages')) throw Error('Each island needs naturally distributed themed scenery');
     if (data.scenery.islands.some(island => Math.max(...island.positions.map(point => Math.hypot(point.x, point.z))) - Math.min(...island.positions.map(point => Math.hypot(point.x, point.z))) < 2)) throw Error('Scenery must extend into the island instead of forming another ring');
     if (data.scenery.islands.some(island => island.trees > 24 || island.paths < 6 || !island.landmark || !island.theme)) throw Error('Each island needs a distinct landmark, connected paths and limited woodland');
@@ -859,7 +867,7 @@ test('real scenery navigation keeps residents out of props and connected across 
         const before = life.actors.map(actor => ({x: actor.x, z: actor.z}));
         life.update(.08);
         for (const actor of life.actors) {
-          const ignore = actor.exitObstacle?.id || (actor.target?.ignore && (actor.state === 'chatting' || actor.routeIndex === actor.route.length - 1) ? actor.target.ignore : null);
+          const ignore = actor.exitObstacle?.id || (actor.target?.ignore && (['chatting','indoors'].includes(actor.state) || actor.routeIndex === actor.route.length - 1) ? actor.target.ignore : null);
           if (!life.navigation.walkable(actor, ignore)) throw Error('Resident entered scenery at seed ' + seed + ', frame ' + frame);
           const step = Math.hypot(actor.x - before[actor.id].x, actor.z - before[actor.id].z);
           if (step > .15) throw Error('Resident teleported');
@@ -870,7 +878,8 @@ test('real scenery navigation keeps residents out of props and connected across 
         }
         const social = life.actors.filter(actor => ['swinging', 'playing', 'chatting'].includes(actor.state) || (actor.activity === 'pairwalk' && actor.partner !== null && Math.hypot(actor.x - life.actors[actor.partner].x, actor.z - life.actors[actor.partner].z) < 3));
         if (social.length > 2) throw Error('Whole household gathered instead of one pair');
-        if (social.length === 2) socialFrames++;
+        const coffeeTogether=life.actors.some(actor=>actor.state==='indoors' && life.actors.some(other=>other!==actor && other.state==='indoors' && other.target?.roomId===actor.target?.roomId));
+        if (social.length === 2 || coffeeTogether) socialFrames++;
       }
       results.push({seed, socialFrames, travelled, islands: life.navigation.islandCounts, obstacleCount: data.obstacles.length});
     }
@@ -879,4 +888,35 @@ test('real scenery navigation keeps residents out of props and connected across 
   expect(results.every(result => result.obstacleCount > 100 && Object.values(result.islands).every(count => count > 0))).toBe(true);
   expect(results.every(result => result.travelled.every(distance => distance > 5))).toBe(true);
   expect(results.some(result => result.socialFrames > 0)).toBe(true);
+});
+
+
+test('interior view and coffee invitations work from the resident greeting', async ({page}) => {
+  await page.getByRole('button',{name:'查看室內',exact:true}).click();
+  await expect(page.locator('#view-interiors')).toHaveAttribute('aria-pressed','true');
+  await expect.poll(async()=>JSON.parse(await page.locator('#world').getAttribute('data-open-buildings')||'[]').length).toBe(6);
+  await page.locator('.label-friends').click();
+  await page.getByRole('button',{name:'打個招呼'}).first().click();
+  const dialog=page.getByRole('region',{name:'娃娃問候'});
+  await expect(dialog.getByRole('button',{name:'去喝杯咖啡',exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'去喝杯咖啡',exact:true}).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('#world')).toHaveAttribute('data-followed-resident','0');
+  await page.getByRole('button',{name:'自動屋頂',exact:true}).click();
+  await expect(page.locator('#view-interiors')).toHaveAttribute('aria-pressed','false');
+});
+
+
+test('indoor controls and coffee invitations fit a phone',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.emulateMedia({reducedMotion:'reduce'});await page.reload();
+  await expect(page.locator('.map-label')).toHaveCount(4,{timeout:20000});
+  const control=page.locator('#view-interiors');
+  await control.click();
+  const bounds=await control.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(390);
+  await page.locator('.label-friends').click();
+  await page.getByRole('button',{name:'打個招呼'}).first().click();
+  const dialog=page.getByRole('region',{name:'娃娃問候'});
+  await expect(dialog.getByRole('button',{name:'回家休息',exact:true})).toBeVisible();
+  const panel=await dialog.boundingBox();expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(390);
 });
