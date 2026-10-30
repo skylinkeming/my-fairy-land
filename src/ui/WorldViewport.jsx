@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { icon } from "./markup.js";
-import { RESIDENT_GREETINGS } from "../residents.js";
+import { chooseResidentGreeting } from "../residents.js";
 import { showIslandFallback } from "../world-fallback.js";
 
 function IllustratedMap({ onSelect }) {
@@ -104,6 +104,7 @@ export function WorldViewport({
   const [fallback, setFallback] = useState(false),
     [ready, setReady] = useState(false),
     [visit, setVisit] = useState(null);
+  const lastGreetings = useRef(new Map());
   const countRef = useRef(count);
   countRef.current = count;
   const shapesRef = useRef(shapes);
@@ -140,16 +141,13 @@ export function WorldViewport({
           () => callbacks.current.onReminder(),
           {
             onResidentSelect: (index) => callbacks.current.onVisit(index),
-            onVisitChange: (index) =>
-              setVisit(
-                index === null
-                  ? null
-                  : {
-                      index,
-                      name: residents[index]?.name || "小島居民",
-                      greeting: RESIDENT_GREETINGS[index],
-                    },
-              ),
+            onVisitChange: (index) => {
+              if(index===null) {setVisit(null);return;}
+              const name=residents[index]?.name || '小島居民';
+              const greeting=chooseResidentGreeting(name,index,lastGreetings.current.get(index));
+              lastGreetings.current.set(index,greeting);
+              setVisit({index,name,greeting});
+            },
             onEditResident: (index) => callbacks.current.onEdit(index),
             residentShapes: shapesRef.current,
             reducedMotion: reducedRef.current,
@@ -208,14 +206,16 @@ export function WorldViewport({
           <span>✿</span> 正在準備你的小島…
         </div>
       )}
+      <div className="resident-speech" hidden={!visit} role="status" aria-live="polite" aria-label="娃娃頭頂的對話">
+        <p>{visit?.greeting}</p>
+      </div>
       <section
         className="resident-dialog"
         hidden={!visit}
         aria-label="娃娃問候"
       >
-        <div role="status">
+        <div>
           <strong>{visit?.name}</strong>
-          <p>{visit?.greeting}</p>
         </div>
         <small>拖曳旋轉視角，從各個方向看看我 ♡</small>
         <div className="resident-dialog-actions">

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { plushSVG } from "./resident-portraits.js";
-import { RESIDENT_GREETINGS } from "../residents.js";
 import { Icon } from "./Icon.jsx";
 export function FriendsPanel({
   residents,
@@ -73,7 +72,7 @@ export function FriendsPanel({
               className="secondary-button"
               data-greet={index}
               onClick={() => {
-                notify(`${resident.name}：${RESIDENT_GREETINGS[index]}`);
+                notify(`${resident.name}停下來和你打招呼 ♡`);
                 worldRef.current?.greet(index);
               }}
             >

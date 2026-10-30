@@ -3493,3 +3493,19 @@ body.resident-editor-open { overflow: hidden; }
 
 .resident-dialog-actions {display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:12px;}
 .resident-dialog-actions button {margin:0;padding:8px 13px;}
+
+/* React owns the speech; Three.js projects only its head anchor while orbiting. */
+.resident-speech {
+  position:absolute;z-index:13;left:var(--resident-bubble-x,50%);top:var(--resident-bubble-y,35%);
+  transform:translate(-50%,-100%);width:max-content;max-width:min(270px,calc(100% - 24px));
+  padding:13px 18px;border:1px solid #c7aa7b;border-radius:19px;background:#fffaf0;
+  box-shadow:0 5px 18px #49382020;color:#65513b;text-align:center;pointer-events:none;
+}
+.resident-speech p {margin:0;font-size:16px;line-height:1.55;overflow-wrap:anywhere;}
+.resident-speech::after {
+  content:'';position:absolute;bottom:-7px;left:calc(50% + var(--resident-bubble-tail,0px));
+  width:12px;height:12px;background:#fffaf0;border-right:1px solid #c7aa7b;border-bottom:1px solid #c7aa7b;
+  transform:translateX(-50%) rotate(45deg);
+}
+.resident-speech[hidden] {display:none;}
+#world[data-resident-bubble-visible="false"] .resident-speech {visibility:hidden;}

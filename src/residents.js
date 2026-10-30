@@ -24,3 +24,16 @@ export const RESIDENT_GREETINGS = [
   "呱！今天也陪你微笑，慢慢來就好 ♡",
   "帶著小尾巴出發！今天想去哪座島探險？ ♡",
 ];
+
+export function chooseResidentGreeting(name, index, previous, random = Math.random) {
+  const greetings = [
+    `Hi！我是${name || '小島居民'} ♡`,
+    '嗨～很高興見到你！',
+    '哈囉！今天過得好嗎？',
+    '嘿！要不要一起喝杯咖啡？ ☕',
+    '你來啦！一起在島上散散步吧 ♡',
+    '嗨！送你一個大大的微笑！',
+    RESIDENT_GREETINGS[index] || '嗨！歡迎來小島玩 ♡',
+  ].filter(greeting => greeting !== previous);
+  return greetings[Math.min(greetings.length - 1, Math.floor(random() * greetings.length))];
+}

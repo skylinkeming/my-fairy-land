@@ -804,6 +804,7 @@ export function createWorld(
     if (interactingResident !== null) life.resume(interactingResident);
     interactingResident = null;
     delete container.dataset.pausedResident;
+    container.dataset.residentBubbleVisible="false";
     onVisitChange(null);
     controls.minPolarAngle = .4;
     controls.maxPolarAngle = 1.22;
@@ -918,7 +919,11 @@ export function createWorld(
   });
   function setResidentShapes(settings) {
     frameDirty = true;
-    residents.forEach((resident, index) => applyResidentShape(resident.g, settings[RESIDENT_SHAPE_IDS[index]]));
+    residents.forEach((resident, index) => {
+      applyResidentShape(resident.g, settings[RESIDENT_SHAPE_IDS[index]]);
+      resident.g.updateWorldMatrix(true,true);
+      resident.headHeight=new T.Box3().setFromObject(resident.g).max.y-resident.g.getWorldPosition(new T.Vector3()).y;
+    });
   }
   setResidentShapes(residentShapes);
   function openResidentEditor(index = 0) {
@@ -1189,6 +1194,22 @@ export function createWorld(
         height - 60,
       );
       reminderButton.style.transform = `translate(-50%,0) translate(${x}px,${y}px)`;
+    }
+    if(interactingResident!==null) {
+      const resident=residents[interactingResident];
+      const head=resident.g.getWorldPosition(new T.Vector3());head.y+=(resident.headHeight || 1.7)+.12;
+      head.project(camera);
+      const headX=(head.x*.5+.5)*width,headY=(-head.y*.5+.5)*height;
+      const speech=container.querySelector('.resident-speech');
+      const half=(speech?.offsetWidth || Math.min(270,width-24))/2;
+      const speechHeight=speech?.offsetHeight || 64;
+      const x=T.MathUtils.clamp(headX,half+12,width-half-12);
+      const y=T.MathUtils.clamp(headY-14,speechHeight+12,height-16);
+      container.style.setProperty('--resident-bubble-x',`${x}px`);
+      container.style.setProperty('--resident-bubble-y',`${y}px`);
+      container.style.setProperty('--resident-bubble-tail',`${T.MathUtils.clamp(headX-x,-half+20,half-20)}px`);
+      container.dataset.residentBubbleVisible=String(head.z>=-1 && head.z<=1 && headX>=0 && headX<=width && headY>=0 && headY<=height);
+      container.dataset.residentHeadX=String(headX);container.dataset.residentHeadY=String(headY);
     }
     const placedLabels = [];
     for (const l of labels) {
