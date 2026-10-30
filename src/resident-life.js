@@ -1,3 +1,4 @@
+import { steerRight, walkingDirection } from "./resident-avoidance.js";
 import { createResidentNavigation } from "./resident-navigation.js";
 // Activity and navigation logic is independent of the renderer so routes can be validated.
 export const ACTIVITY_LABELS = {
@@ -31,11 +32,11 @@ export function findIslandPath(from, to, links) {
   throw new Error(`No walking path between ${from} and ${to}`);
 }
 // Store attempted world directions, including blocked candidates, across encounters.
-export function chooseDeparture(actor, away, random, canDepart) {
+export function chooseDeparture(actor, away, random, canDepart, spread = .55) {
   const history = actor.turnHistory ||= [];
   const directions = Array.from({ length: 96 }, (_, sector) => ({
     sector, heading: sector * Math.PI * 2 / 96,
-  })).filter(({ heading }) => Math.cos(heading - away) >= Math.cos(.55));
+  })).filter(({ heading }) => Math.cos(heading - away) >= Math.cos(spread));
   const preferred = away + (random() - .5) * 1.1;
   const angleDistance = heading => Math.abs(Math.atan2(Math.sin(heading - preferred), Math.cos(heading - preferred)));
   directions.sort((a, b) => angleDistance(a.heading) - angleDistance(b.heading));
@@ -200,11 +201,12 @@ export function createResidentLife({
       dx = (b.x - a.x) / length,
       dz = (b.z - a.z) / length;
     return {
-      x: a.x + dx * 5.64,
-      z: a.z + dz * 5.64,
+      x: a.x + dx * (a.walkRadius || 6) * .94,
+      z: a.z + dz * (a.walkRadius || 6) * .94,
+      halfWidth: Math.min(a.bridgeHalfWidth ?? .18, b.bridgeHalfWidth ?? .18),
       dx,
       dz,
-      length: Math.max(0.01, length - 11.28),
+      length: Math.max(0.01, length - ((a.walkRadius || 6) + (b.walkRadius || 6)) * .94),
       owner: null,
     };
   });
@@ -320,6 +322,8 @@ export function createResidentLife({
     }
     if (route && actor.exitObstacle) route.unshift({ x: actor.x, z: actor.z });
     actor.departure = null;
+    actor.avoidance = null;
+    actor.bridgeLane = null;
     actor.bridgeYield = null;
     actor.goalMode = mode;
     actor.target = target;
@@ -425,6 +429,7 @@ export function createResidentLife({
     )
       return false;
     return bridges.every((bridge) => {
+      if (bridge.halfWidth >= .8) return true;
       if (
         !inBridge(destination, bridge, 0.3, 0.3) ||
         bridge.owner === null ||
@@ -453,40 +458,67 @@ export function createResidentLife({
     const remaining = distance(actor, next);
     if (remaining < 1e-6) return true;
     const step = Math.min(amount, remaining);
-    let heading = Math.atan2(next.x - actor.x, next.z - actor.z),
-      aligning = false;
-    for (const bridge of bridges)
-      if (inBridge(actor, bridge, 0.8, 0.8)) {
-        const lateral =
-          (actor.x - bridge.x) * bridge.dz - (actor.z - bridge.z) * bridge.dx;
-        const along =
-          (actor.x - bridge.x) * bridge.dx + (actor.z - bridge.z) * bridge.dz;
-        const targetAlong =
-          (next.x - bridge.x) * bridge.dx + (next.z - bridge.z) * bridge.dz;
-        if (
-          Math.abs(lateral) > 0.12 &&
-          ((along < bridge.length / 2 && targetAlong > along) ||
-            (along >= bridge.length / 2 && targetAlong < along))
-        ) {
-          heading = Math.atan2(-lateral * bridge.dz, lateral * bridge.dx);
+    const desired = {x: (next.x - actor.x) / remaining, z: (next.z - actor.z) / remaining};
+    const narrow = bridges.some(bridge => bridge.halfWidth < .8 && inBridge(actor, bridge, 2, 1.5));
+    let direction = narrow ? desired : steerRight(actor, actors, desired), aligning = false;
+    for (const bridge of bridges) {
+      if (!inBridge(actor, bridge, .8, bridge.halfWidth + .2)) continue;
+      if (bridge.halfWidth >= .8) {
+        const travel = desired.x * bridge.dx + desired.z * bridge.dz >= 0 ? 1 : -1;
+        const lateral = (actor.x - bridge.x) * bridge.dz - (actor.z - bridge.z) * bridge.dx;
+        const nearby = actors.filter(other => other !== actor && distance(actor, other) < 5);
+        const opposing = nearby.some(other => {
+          const intent = walkingDirection(other);
+          return (intent.x * bridge.dx + intent.z * bridge.dz) * travel < -.3;
+        });
+        const sideBySide = nearby.some(other => {
+          const intent = walkingDirection(other);
+          return (intent.x * bridge.dx + intent.z * bridge.dz) * travel > .7;
+        });
+        const bridgeIndex = bridges.indexOf(bridge);
+        if (actor.bridgeLane?.bridge !== bridgeIndex)
+          actor.bridgeLane = {bridge: bridgeIndex, side: sideBySide && Math.abs(lateral) > .35 ? Math.sign(lateral) : travel};
+        if (opposing) actor.bridgeLane.side = travel;
+        const correction = Math.max(-1, Math.min(1, (actor.bridgeLane.side * .68 - lateral) * 2));
+        const x = bridge.dx * travel + bridge.dz * correction;
+        const z = bridge.dz * travel - bridge.dx * correction;
+        const length = Math.hypot(x, z);
+        direction = {x: x / length, z: z / length};
+        aligning = true;
+        // Lane-offset bridge waypoints are passed without returning to the centerline.
+        if (remaining < 1 && Math.abs((next.x - actor.x) * bridge.dx + (next.z - actor.z) * bridge.dz) < .12) return true;
+      } else {
+        actor.avoidance = null;
+        const lateral = (actor.x - bridge.x) * bridge.dz - (actor.z - bridge.z) * bridge.dx;
+        if (Math.abs(lateral) > .12) {
+          const length = Math.abs(lateral);
+          direction = {x: -lateral * bridge.dz / length, z: lateral * bridge.dx / length};
           aligning = true;
-          break;
         }
       }
-    for (const turn of [
-      0,
-      0.45,
-      -0.45,
-      0.9,
-      -0.9,
-      Math.PI / 2,
-      -Math.PI / 2,
-      2.2,
-      -2.2,
-      Math.PI,
-    ]) {
+      break;
+    }
+    if (actor.avoidance && !aligning && !narrow) {
+      const lookAhead = {x: actor.x + direction.x * 1.2, z: actor.z + direction.z * 1.2};
+      if (!navigation.clearSegment(actor, lookAhead, ignoredObstacle(actor))) {
+        const peer = actors.find(other => other.id === actor.avoidance.other);
+        if (peer && peer.state === 'walking' && !paused.has(peer.id)) {
+          // Stable priority in a tight passage: one continues, the other waits
+          // or backs into free space, rather than both switching sides.
+          actor.waitingFor = actor.id > peer.id ? peer.id : null;
+          if (actor.waitingFor !== null) {
+            if (distance(actor, peer) > 2.3) { actor.yielding = true; return false; }
+            direction = {x: -desired.x, z: -desired.z};
+          } else direction = desired;
+        }
+      } else actor.waitingFor = null;
+    } else actor.waitingFor = null;
+    const heading = Math.atan2(direction.x, direction.z);
+    const avoiding = Boolean(actor.avoidance) || aligning;
+    // A blocked crowd yields instead of trying arbitrary left/right turns each frame.
+    for (const turn of narrow ? [0, .45, -.45, .9, -.9, Math.PI / 2, -Math.PI / 2, Math.PI] : [0]) {
       const point =
-        !aligning && turn === 0 && remaining <= amount
+        !avoiding && turn === 0 && remaining <= amount
           ? next
           : {
               x: actor.x + Math.sin(heading + turn) * step,
@@ -498,84 +530,18 @@ export function createResidentLife({
       actor.heading = heading + turn;
       actor.walkTime += step / 0.95;
       actor.yielding = turn !== 0;
-      const island = nodes.find((node) => distance(actor, node) <= 6);
+      const island = nodes.find((node) => distance(actor, node) <= (node.walkRadius || 6));
       if (island) actor.node = island.id;
       for (const bridge of bridges)
         if (
-          inBridge(actor, bridge, 0.25, 0.3) &&
+          bridge.halfWidth < .8 && inBridge(actor, bridge, 0.25, 0.3) &&
           (bridge.owner === null || bridge.owner === actor.id)
         )
           bridge.owner = actor.id;
-      return !aligning && turn === 0 && remaining <= amount;
+      return !avoiding && turn === 0 && remaining <= amount;
     }
     actor.yielding = true;
     return false;
-  }
-  function turnApart() {
-    for (let i = 0; i < actors.length; i++)
-      for (let j = i + 1; j < actors.length; j++) {
-        const a = actors[i],
-          b = actors[j];
-        if (
-          a.partner === b.id ||
-          [a, b].some((actor) => elapsed < (actor.turnCooldown || 0))
-        )
-          continue;
-        if (
-          distance(a, b) > 1.9 ||
-          bridges.some(
-            (bridge) =>
-              inBridge(a, bridge, 1.5, 1) || inBridge(b, bridge, 1.5, 1),
-          )
-        )
-          continue;
-        const approaching = (actor) => {
-          if (paused.has(actor.id) || actor.state !== "walking") return false;
-          const other = actor === a ? b : a,
-            next = actor.departure
-              ? {
-                  x: actor.x + Math.sin(actor.departure.heading),
-                  z: actor.z + Math.cos(actor.departure.heading),
-                }
-              : actor.route[actor.routeIndex];
-          return (
-            next &&
-            (next.x - actor.x) * (other.x - actor.x) +
-              (next.z - actor.z) * (other.z - actor.z) >
-              0
-          );
-        };
-        if (!approaching(a) && !approaching(b)) continue;
-        for (const [actor, other] of [
-          [a, b],
-          [b, a],
-        ]) {
-          if (
-            actor.state !== "walking" ||
-            paused.has(actor.id) ||
-            actor.exitObstacle ||
-            (actor.target?.ignore && !navigation.walkable(actor))
-          )
-            continue;
-          const away = Math.atan2(actor.x - other.x, actor.z - other.z);
-          const heading = chooseDeparture(actor, away, random, (heading) => {
-            const point = {
-              x: actor.x + Math.sin(heading) * 1.4,
-              z: actor.z + Math.cos(heading) * 1.4,
-            };
-            return navigation.clearSegment(actor, point) &&
-              !bridges.some((bridge) => inBridge(point, bridge, 1.5, 1));
-          });
-          if (heading !== null) {
-            actor.departure = { heading };
-            actor.route = [];
-            actor.routeIndex = 0;
-            actor.target = null;
-            actor.goalMode = mode;
-            actor.turnCooldown = elapsed + 5;
-          }
-        }
-      }
   }
   function step(dt) {
     elapsed += dt;
@@ -670,6 +636,7 @@ export function createResidentLife({
       for (let index = 0; index < bridges.length; index++) {
         const bridge = bridges[index];
         if (
+          bridge.halfWidth >= .8 ||
           bridge.owner === null ||
           bridge.owner === actor.id ||
           !inBridge(actor, bridge, 1, 0.65)
@@ -686,7 +653,7 @@ export function createResidentLife({
                 x: bridge.x + bridge.dx * bridge.length,
                 z: bridge.z + bridge.dz * bridge.length,
               };
-        const island = nodes.find((node) => distance(actor, node) <= 6);
+        const island = nodes.find((node) => distance(actor, node) <= (node.walkRadius || 6));
         if (!island) continue;
         for (const lateral of [1.4, -1.4]) {
           const desired = {
@@ -707,7 +674,6 @@ export function createResidentLife({
         if (actor.bridgeYield) break;
       }
     }
-    turnApart();
     for (const actor of actors) {
       if (paused.has(actor.id)) continue;
       if (actor.exitObstacle && navigation.walkable(actor))
@@ -764,20 +730,28 @@ export function createResidentLife({
                 : 2 + random() * 5;
             actor.playTime = 0;
           } else if (
-            next &&
-            actor.yielding &&
-            !navigation.clearSegment(actor, next, ignoredObstacle(actor))
+            next && actor.yielding
           ) {
             actor.blockedTime += dt;
-            if (actor.blockedTime > 0.6) {
-              const target = actor.target.approach || actor.target.point,
-                path = actor.exitObstacle
-                  ? null
-                  : navigation.route(actor, target);
+            if (actor.blockedTime > 3) {
+              const target = actor.target.approach || actor.target.point;
+              const heading = chooseDeparture(actor, actor.heading, random, heading => {
+                const point = {x: actor.x + Math.sin(heading) * 2, z: actor.z + Math.cos(heading) * 2};
+                return navigation.clearSegment(actor, point, ignoredObstacle(actor)) &&
+                  actors.every(other => other === actor || distance(point, other) >= RESIDENT_SPACING);
+              }, Math.PI);
+              let path = null;
+              if (heading !== null) {
+                const via = {x: actor.x + Math.sin(heading) * 2, z: actor.z + Math.cos(heading) * 2};
+                const remainder = navigation.route(via, target);
+                if (remainder) path = [{x: actor.x, z: actor.z}, ...remainder];
+              }
+              path ||= actor.exitObstacle ? null : navigation.route(actor, target);
               if (path) {
                 if (actor.target.approach) path.push(actor.target.point);
                 actor.route = path;
                 actor.routeIndex = 1;
+                actor.avoidance = null;
               }
               actor.blockedTime = 0;
             }
@@ -841,10 +815,10 @@ export function createResidentLife({
     update,
     initialMode,
     pause(index) {
-      if (actors[index]) paused.add(index);
+      if (actors[index]) { paused.add(index); actors[index].paused = true; }
     },
     resume(index) {
-      if (actors[index]) paused.delete(index);
+      if (actors[index]) { paused.delete(index); actors[index].paused = false; }
     },
     isPaused(index) {
       return paused.has(index);

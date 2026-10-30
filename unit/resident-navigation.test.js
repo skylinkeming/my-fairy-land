@@ -116,3 +116,23 @@ test("scene footprints follow translated, rotated and scaled geometry", () => {
   mesh.geometry.dispose();
   mesh.material.dispose();
 });
+
+test('a blocked walker waits three seconds before rerouting and retains its goal', () => {
+  const life = createResidentLife({nodes, links: [], obstacles: [house], count: 1, random: () => .1});
+  const actor = life.actors[0], goal = {x: 3, z: 0};
+  Object.assign(actor, {x: -3, z: 0, state: 'walking', activity: 'wander',
+    route: [goal], routeIndex: 0, target: {node: 'home', point: goal, state: 'waiting'}});
+  let firstBlocked = null, replanned = false, arrived = false;
+  for (let frame = 0; frame < 500; frame++) {
+    life.update(.05);
+    assert.ok(life.navigation.walkable(actor));
+    if (actor.yielding && firstBlocked === null) firstBlocked = life.elapsed;
+    if (actor.route.length > 1 && !replanned) {
+      assert.ok(life.elapsed - firstBlocked >= 2.95, 'do not reroute during a brief pause');
+      assert.deepEqual(actor.target.point, goal, 'keep the original destination');
+      replanned = true;
+    }
+    if (Math.hypot(actor.x - goal.x, actor.z - goal.z) < .05) { arrived = true; break; }
+  }
+  assert.ok(replanned && arrived, 'a sustained stall must produce a usable detour');
+});

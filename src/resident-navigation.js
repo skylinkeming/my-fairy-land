@@ -30,15 +30,16 @@ export function createResidentNavigation({
     return {
       from,
       to,
-      a: { x: from.x + dx * 5.64, z: from.z + dz * 5.64 },
-      b: { x: to.x - dx * 5.64, z: to.z - dz * 5.64 },
+      halfWidth: Math.min(from.bridgeHalfWidth ?? .18, to.bridgeHalfWidth ?? .18),
+      a: { x: from.x + dx * (from.walkRadius || 6) * .94, z: from.z + dz * (from.walkRadius || 6) * .94 },
+      b: { x: to.x - dx * (to.walkRadius || 6) * .94, z: to.z - dz * (to.walkRadius || 6) * .94 },
     };
   });
   function onGround(point) {
     return (
-      nodes.some((node) => distance(point, node) <= 6) ||
+      nodes.some((node) => distance(point, node) <= (node.walkRadius || 6)) ||
       bridges.some(
-        (bridge) => segmentDistance(point, bridge.a, bridge.b) <= 0.18,
+        (bridge) => segmentDistance(point, bridge.a, bridge.b) <= bridge.halfWidth,
       )
     );
   }
@@ -48,7 +49,7 @@ export function createResidentNavigation({
       if (obstacle.kind === "river") {
         if (
           crossings.some(
-            (crossing) => segmentDistance(point, crossing.a, crossing.b) < 0.15,
+            (crossing) => segmentDistance(point, crossing.a, crossing.b) < (crossing.halfWidth ?? .15),
           )
         )
           continue;
@@ -114,10 +115,11 @@ export function createResidentNavigation({
   for (const node of nodes) {
     const grid = new Map(),
       indices = [];
+    const spacing = .2 * (node.walkRadius || 6) / 6;
     for (let x = -30; x <= 30; x++)
       for (let z = -30; z <= 30; z++) {
-        const point = { x: node.x + x * 0.2, z: node.z + z * 0.2 };
-        if (distance(point, node) > 6 || !walkable(point)) continue;
+        const point = { x: node.x + x * spacing, z: node.z + z * spacing };
+        if (distance(point, node) > (node.walkRadius || 6) || !walkable(point)) continue;
         const index = add(point, node.id);
         grid.set(`${x},${z}`, index);
         indices.push(index);
@@ -162,10 +164,15 @@ export function createResidentNavigation({
       connect(a, b);
   }
   for (const bridge of bridges) {
-    const a = attach(bridge.a, bridge.from.id),
-      b = attach(bridge.b, bridge.to.id);
-    if (a !== null && b !== null && clearSegment(bridge.a, bridge.b))
-      connect(a, b);
+    const length = distance(bridge.a, bridge.b),
+      dx = (bridge.b.x - bridge.a.x) / length,
+      dz = (bridge.b.z - bridge.a.z) / length;
+    for (const offset of bridge.halfWidth >= .8 ? [-.68, 0, .68] : [0]) {
+      const start = {x: bridge.a.x + dz * offset, z: bridge.a.z - dx * offset};
+      const end = {x: bridge.b.x + dz * offset, z: bridge.b.z - dx * offset};
+      const a = attach(start, bridge.from.id), b = attach(end, bridge.to.id);
+      if (a !== null && b !== null && clearSegment(start, end)) connect(a, b);
+    }
   }
   // Only spawn or choose destinations in the main connected walking network.
   const seen = new Set(),

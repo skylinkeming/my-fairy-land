@@ -119,7 +119,7 @@ test("only a pair occasionally meets while other residents continue their own ac
   assert.ok(dispersed, 'independent residents must not all converge on one island');
 });
 
-test("head-on walkers separate and continue away without overlapping or teleporting", () => {
+test("head-on walkers pass on the right without overlapping or teleporting", () => {
   const life = createResidentLife({nodes,links,random:()=>.1,count:2});
   for (const [i,actor] of life.actors.entries()) {
     actor.x = i ? 2 : -2; actor.z = 2;
@@ -127,50 +127,34 @@ test("head-on walkers separate and continue away without overlapping or teleport
     actor.route = [{x:actor.x,z:2},{x:-actor.x,z:2}]; actor.routeIndex=1;
     actor.target = {node:"home",point:actor.route[1],state:"waiting"};
   }
-  for (let i=0;i<60;i++) {
+  for (let i=0;i<160;i++) {
     const before=life.actors.map(actor=>({x:actor.x,z:actor.z}));
     life.update(.05);
     const [a,b]=life.actors;
     assert.ok(Math.hypot(a.x-b.x,a.z-b.z)>=1.18-1e-6);
     life.actors.forEach((actor,index)=>assert.ok(Math.hypot(actor.x-before[index].x,actor.z-before[index].z)<=.0476));
   }
-  assert.ok(life.actors[0].x< -1 && life.actors[1].x>1,"both dolls must keep walking in their new directions");
+  assert.ok(life.actors[0].x > 1 && life.actors[1].x < -1, "both dolls pass and continue toward their original destinations");
 });
 
-test("nearby approaching walkers randomly turn apart before touching", () => {
-  const headings = [];
-  for (const draw of [.1, .9]) {
-    const life = createResidentLife({nodes, links, random: () => draw, count: 2});
-    for (const [i, actor] of life.actors.entries()) {
-      actor.x = i ? .9 : -.9; actor.z = 2;
-      actor.node = "home"; actor.state = "walking"; actor.goalMode = life.mode; actor.activity = "wander"; actor.partner = null;
-      actor.route = [{x: actor.x, z: 2}, {x: i ? -3 : 3, z: 2}];
-      actor.routeIndex = 1;
-      actor.target = {node: "home", point: actor.route[1], state: "waiting"};
-    }
-    life.update(.1);
-    const [a, b] = life.actors;
-    assert.ok(a.departure && b.departure, "both walkers should choose a new walking direction");
-    assert.equal(a.target, null, "discard the old destination rather than resume it");
-    assert.equal(b.target, null);
-    assert.deepEqual(a.route, []);
-    assert.deepEqual(b.route, []);
-    assert.ok(a.x < -.9 && b.x > .9, "walk away from each other before reaching minimum spacing");
-    assert.ok(Math.cos(a.heading - b.heading) < -.4, "escape headings should point apart");
-    headings.push(a.heading);
-    life.update(.8);
-    assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 3, "keep walking away rather than turn back immediately");
-    const positions = [a, b].map(actor => ({x: actor.x, z: actor.z, heading: actor.heading}));
-    life.update(2.2);
-    [a, b].forEach((actor, i) => {
-      const before = positions[i];
-      const forward = (actor.x - before.x) * Math.sin(before.heading) +
-        (actor.z - before.z) * Math.cos(before.heading);
-      assert.ok(forward > 1.9, "continue forward beyond the former 1.8-second detour timeout");
-      assert.ok(actor.departure, "do not fall back to the old route");
-    });
+test("walkers predict a collision early and consistently choose their own right side", () => {
+  const life = createResidentLife({nodes, links, random: () => .1, count: 2});
+  for (const [i, actor] of life.actors.entries()) {
+    const end = {x: i ? -3 : 3, z: 2};
+    Object.assign(actor, {x: i ? 2 : -2, z: 2, node: 'home', state: 'walking',
+      activity: 'wander', partner: null, route: [end], routeIndex: 0,
+      target: {node: 'home', point: end, state: 'waiting'}});
   }
-  assert.ok(Math.abs(headings[0] - headings[1]) > .5, "random draws should produce different turns");
+  life.update(.1);
+  const [a, b] = life.actors;
+  assert.ok(a.avoidance && b.avoidance, 'predict contact while still almost four units apart');
+  assert.ok(a.z < 2 && b.z > 2, 'both choose their own right side');
+  assert.ok(a.x > -2 && b.x < 2, 'continue forward instead of turning away');
+  assert.ok(a.target && b.target, 'keep original destinations');
+  const sides = [a.avoidance.z, b.avoidance.z];
+  life.update(.5);
+  assert.deepEqual([a.avoidance.z, b.avoidance.z], sides, 'hold the selected side throughout the encounter');
+  assert.ok(a.z < 2 && b.z > 2);
 });
 
 test("visiting one doll freezes its walk until released while the others carry on", () => {
@@ -232,21 +216,28 @@ test("opposite walkers take turns on a narrow bridge and both finish crossing", 
 });
 
 test('occasional walking companions meet and keep moving without gathering everyone', () => {
+  let draw = () => .1;
+  const life = createResidentLife({nodes, links, random: () => draw(), count: 3});
+  life.update(52.4);
+  for (const [id, actor] of life.actors.entries()) {
+    const point = id === 0 ? {x: -13.8, z: 2} : {x: id === 1 ? -2 : 0, z: 2};
+    Object.assign(actor, {...point, node: id === 0 ? 'todo' : 'home', activity: 'wander',
+      state: 'waiting', wait: 10, departure: null, avoidance: null});
+  }
+  let draws = 0;
+  draw = () => draws++ === 0 ? .99 : .1; // Next social phase chooses a local walking pair.
+  life.update(.2);
+  assert.equal(life.actors.filter(actor => actor.activity === 'pairwalk').length, 2);
   let walkedTogether = false;
-  // Fixed scenario includes a completed meeting under history-aware avoidance.
-  for (const seed of [11]) {
-    let value = seed;
-    const random = () => {value = (Math.imul(value, 1664525) + 1013904223) >>> 0; return value / 4294967296;};
-    const life = createResidentLife({nodes, links, random});
-    for (let frame = 0; frame < 4000; frame++) {
-      const before = life.actors.map(actor => actor.walkTime);
-      life.update(.08);
-      const pair = life.actors.filter(actor => actor.activity === 'pairwalk');
-      if (pair.length === 2 && pair[0].node === pair[1].node && Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z) < 3 && pair.every(actor => actor.walkTime > before[actor.id])) {
-        assert.equal(pair[0].partner, pair[1].id);
-        assert.ok(life.actors.some(actor => actor.node !== pair[0].node));
-        walkedTogether = true; break;
-      }
+  for (let frame = 0; frame < 800; frame++) {
+    const before = life.actors.map(actor => actor.walkTime);
+    life.update(.08);
+    const pair = life.actors.filter(actor => actor.activity === 'pairwalk');
+    if (pair.length === 2 && pair.every(actor => actor.walkTime > before[actor.id]) &&
+        Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z) < 3) {
+      assert.equal(pair[0].partner, pair[1].id);
+      assert.ok(life.actors.some(actor => actor.node !== pair[0].node));
+      walkedTogether = true; break;
     }
   }
   assert.ok(walkedTogether, 'retain the ability to occasionally go for a walk as a pair');
@@ -266,4 +257,77 @@ test("encounters remember the last ten attempted world directions, including blo
     assert.equal(actor.turnHistory.length, Math.min(10, attempts.length));
     assert.deepEqual(actor.turnHistory, attempts.slice(-10));
   }
+});
+
+test('widened bridges let opposite walkers occupy different lanes and both cross', () => {
+  const wideNodes = [
+    {id: 'home', x: 0, z: 0, walkRadius: 12, bridgeHalfWidth: .94},
+    {id: 'todo', x: -28, z: 0, walkRadius: 12, bridgeHalfWidth: .94},
+  ];
+  const life = createResidentLife({nodes: wideNodes, links: [['home', 'todo']], count: 2, random: () => .1});
+  for (const [i, actor] of life.actors.entries()) {
+    const start = i ? -19 : -9, end = i ? -8 : -20;
+    Object.assign(actor, {x: start, z: 0, node: i ? 'todo' : 'home',
+      state: 'walking', activity: 'wander', partner: null,
+      route: [{x: end, z: 0}], routeIndex: 0,
+      target: {node: i ? 'home' : 'todo', point: {x: end, z: 0}, state: 'waiting'}});
+  }
+  let together = false;
+  const arrived = new Set();
+  for (let frame = 0; frame < 1600; frame++) {
+    life.update(.025);
+    const [a, b] = life.actors;
+    assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 1.18 - 1e-6);
+    assert.ok(life.actors.every(actor => life.navigation.walkable(actor)));
+    if (life.actors.every(actor => actor.x < -11.28 && actor.x > -16.72)) together = true;
+    if (a.x < -18) arrived.add(a.id);
+    if (b.x > -10) arrived.add(b.id);
+    if (arrived.size === 2) break;
+  }
+  assert.ok(together, 'the wide bridge must support simultaneous opposite traffic');
+  assert.equal(arrived.size, 2, 'both walkers must complete the crossing');
+});
+
+test('wide bridges preserve two parallel lanes for walkers travelling together', () => {
+  const wideNodes = [
+    {id: 'home', x: 0, z: 0, walkRadius: 12, bridgeHalfWidth: .94},
+    {id: 'todo', x: -28, z: 0, walkRadius: 12, bridgeHalfWidth: .94},
+  ];
+  const life = createResidentLife({nodes: wideNodes, links: [['home', 'todo']], count: 2, random: () => .1});
+  for (const [i, actor] of life.actors.entries()) {
+    const z = i ? .68 : -.68, end = {x: -18, z};
+    Object.assign(actor, {x: -11, z, node: 'home', state: 'walking', activity: 'wander', partner: null,
+      route: [end], routeIndex: 0, target: {node: 'todo', point: end, state: 'waiting'}});
+  }
+  for (let frame = 0; frame < 260; frame++) {
+    life.update(.025);
+    const [a, b] = life.actors;
+    assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 1.18 - 1e-6);
+    assert.ok(Math.abs(a.x - b.x) < .1, 'keep moving side by side');
+  }
+  assert.ok(life.actors.every(actor => actor.x < -16), 'both parallel lanes make progress across the bridge');
+});
+
+test('a tight passage uses stable priority and waiting instead of switching sides', () => {
+  const obstacles = [
+    {id: 'upper-wall', minX: -3, maxX: 3, minZ: .65, maxZ: 5},
+    {id: 'lower-wall', minX: -3, maxX: 3, minZ: -5, maxZ: -.65},
+  ];
+  const life = createResidentLife({nodes: [{id: 'home', x: 0, z: 0}], links: [], obstacles, count: 2, random: () => .1});
+  for (const [i, actor] of life.actors.entries()) {
+    const end = {x: i ? -4 : 4, z: 0};
+    Object.assign(actor, {x: i ? 2 : -2, z: 0, node: 'home', state: 'walking', activity: 'wander', partner: null,
+      route: [end], routeIndex: 0, target: {node: 'home', point: end, state: 'waiting'}});
+  }
+  let waited = false, firstPassed = false;
+  for (let frame = 0; frame < 1000; frame++) {
+    life.update(.025);
+    const [a, b] = life.actors;
+    assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 1.18 - 1e-6);
+    assert.ok(life.actors.every(actor => life.navigation.walkable(actor)));
+    if (b.waitingFor === a.id) waited = true;
+    if (a.x > 3.5) { firstPassed = true; break; }
+  }
+  assert.ok(waited, 'one walker explicitly waits for the priority walker');
+  assert.ok(firstPassed, 'priority walker is allowed to leave the passage');
 });

@@ -44,7 +44,7 @@ export function collectSceneryNavigation(groups, rivers, footbridges, top) {
   const crossings = footbridges.map(({ group, island }) => {
     const a = new T.Vector3(0, 0, -1.5).applyMatrix4(group.matrixWorld);
     const b = new T.Vector3(0, 0, 1.5).applyMatrix4(group.matrixWorld);
-    return { island, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z } };
+    return { island, halfWidth: group.userData.walkHalfWidth ?? .15, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z } };
   });
   return { obstacles, crossings };
 }

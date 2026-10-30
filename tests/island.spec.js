@@ -836,6 +836,8 @@ test('real scenery navigation keeps residents out of props and connected across 
   const results = await page.evaluate(async () => {
     const {createResidentLife} = await import('/src/resident-life.js');
     const data = window.navigationData, results = [];
+    if (!data.nodes.every(node => node.walkRadius === 12 && node.bridgeHalfWidth === .94)) throw Error('All six islands and inter-island bridges must use their expanded walking bounds');
+    if (!data.crossings.every(crossing => crossing.halfWidth === .84)) throw Error('River footbridges must also use doubled widths');
     for (const seed of [1, 7, 23]) {
       let state = seed;
       const random = () => {state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296;};

@@ -12,7 +12,7 @@ import {
   decorateBoardTile,
 } from "./board-art.js";
 import {collectSceneryNavigation} from "./scenery-navigation.js";
-import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
+import { createResidentLife, ACTIVITY_LABELS, PARK as BASE_PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { applyResidentShape, disposeShapeGeometry, RESIDENT_SHAPE_IDS } from "./resident-shape.js";
 export function createWorld(
@@ -22,6 +22,7 @@ export function createWorld(
   onReminder = () => onSelect("todo"),
   { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
 ) {
+  const PARK = {...BASE_PARK, z: BASE_PARK.z * 2, walkRadius: 12, bridgeHalfWidth: .94};
   const canvas = container.querySelector("canvas"),
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
   let frameDirty = true, reduced = Boolean(reducedMotion);
@@ -40,7 +41,7 @@ export function createWorld(
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = !reduced;
   controls.minZoom = 0.68;
-  controls.maxZoom = 8;
+  controls.maxZoom = 14;
   controls.enablePan = true;
   controls.screenSpacePanning = false;
   controls.minPolarAngle = 0.4;
@@ -62,10 +63,10 @@ export function createWorld(
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, {
-    left: -40,
-    right: 40,
-    top: 40,
-    bottom: -40,
+    left: -65,
+    right: 65,
+    top: 65,
+    bottom: -65,
     near: 1,
     far: 130,
   });
@@ -107,8 +108,8 @@ export function createWorld(
     m.position.set(x, y, z);
     return m;
   }
-  // Radius × 2.4 gives every original hexagon 5.76 times its land area.
-  const landScale = 2.4;
+  // Double the previous island width and depth; buildings retain their original size.
+  const landScale = 4.8;
   const top = 0.67,
     defs = [
       { id: "home", x: 0, z: 0, c: "#afc588" },
@@ -120,6 +121,8 @@ export function createWorld(
     groups = {},
     selectable = [];
   defs.forEach((d) => {
+    d.walkRadius = 12;
+    d.bridgeHalfWidth = .94;
     d.x *= landScale * 0.9;
     d.z *= landScale * 0.9;
     const g = new T.Group();
@@ -414,7 +417,7 @@ export function createWorld(
     scene.add(g);
     for (let i = 0; i < 8; i++)
       box(
-        1.4,
+        2.8,
         0.1,
         (len / 8) * 0.88,
         "#c9a878",
@@ -425,8 +428,8 @@ export function createWorld(
       );
     for (const s of [-1, 1]) {
       for (const z of [-len / 2, len / 2])
-        cyl(0.04, 0.05, 0.55, "#b89c73", s * 0.75, 0.23, z, g, 6);
-      box(0.055, 0.055, len, "#d8ba8b", s * 0.75, 0.46, 0, g);
+        cyl(0.04, 0.05, 0.55, "#b89c73", s * 1.5, 0.23, z, g, 6);
+      box(0.055, 0.055, len, "#d8ba8b", s * 1.5, 0.46, 0, g);
     }
   }
   [
@@ -446,7 +449,7 @@ export function createWorld(
     [7.3, 7.08, 0.23, "#efdeb1", 0.38],
     [7.03, 7.25, 0.22, "#b4c991", 0.56],
   ]) {
-    const terrain = cyl(radius, bottom, height, color, 0, y, 0, garden, 6);
+    const terrain = cyl(radius * 2, bottom * 2, height, color, 0, y, 0, garden, 6);
     terrain.rotation.y = 0;
     if (y === -0.12) terrain.material = woodMaterial();
     if (y === 0.56) styleTerrain(terrain, "pasture");
@@ -559,13 +562,14 @@ export function createWorld(
   function footbridge(x, z, parent, rotation = 0) {
     const g = new T.Group();
     g.userData.walkThrough = true;
+    g.userData.walkHalfWidth = .84;
     footbridgeDefinitions.push({group: g, island: Object.entries({...groups, park: garden}).find(([, value]) => value === parent)?.[0]});
     g.position.set(x, top + 0.18, z);
     g.rotation.y = rotation;
     parent.add(g);
     for (let i = 0; i < 12; i++)
       box(
-        1.3,
+        2.6,
         0.1,
         0.15,
         "#c4a071",
@@ -576,8 +580,8 @@ export function createWorld(
       );
     for (const side of [-1, 1]) {
       for (const z of [-0.9, 0, 0.9])
-        cyl(0.04, 0.05, 0.68, "#ae8f68", side * 0.72, 0.33, z, g, 6);
-      box(0.055, 0.06, 1.9, "#d6b789", side * 0.72, 0.65, 0, g);
+        cyl(0.04, 0.05, 0.68, "#ae8f68", side * 1.44, 0.33, z, g, 6);
+      box(0.055, 0.06, 1.9, "#d6b789", side * 1.44, 0.65, 0, g);
     }
   }
   // The extra land is usable countryside rather than scaled-up buildings.
@@ -847,8 +851,8 @@ export function createWorld(
     const target = resident.g.position.clone().add(new T.Vector3(0, .85, 0));
     const heading = resident.g.rotation.y + .65;
     controls.target.copy(target);
-    camera.position.copy(target).add(new T.Vector3(Math.sin(heading) * 35, 32, Math.cos(heading) * 35));
-    camera.zoom = 8;
+    camera.position.copy(target).add(new T.Vector3(Math.sin(heading) * 45, 42, Math.cos(heading) * 45));
+    camera.zoom = 13.8;
     camera.updateProjectionMatrix();
     controls.minPolarAngle = .08;
     controls.maxPolarAngle = Math.PI - .08;
@@ -882,7 +886,7 @@ export function createWorld(
         dz = (to.z - from.z) / length;
       const points = [[0, 1.6]];
       if (dz < -0.1) points.push([2.4, 1.4], [2.4, -2.1]);
-      points.push([dx * 5.64, dz * 5.64]);
+      points.push([dx * 11.28, dz * 11.28]);
       curvedPath(points, groups[from.id], 0.65);
     }
   }
@@ -1063,7 +1067,7 @@ export function createWorld(
     if (camera.zoom === defaultZoom) camera.zoom = nextDefaultZoom;
     defaultZoom = nextDefaultZoom;
     const aspect = width / height,
-      v = width < 600 ? 25 / Math.min(aspect, 1) : 22;
+      v = width < 600 ? 43 / Math.min(aspect, 1) : 38;
     camera.left = -v * aspect;
     camera.right = v * aspect;
     camera.top = v;
@@ -1107,7 +1111,7 @@ export function createWorld(
           const x = actor.x - (crossing.a.x + crossing.b.x) / 2;
           const z = actor.z - (crossing.a.z + crossing.b.z) / 2;
           const along = x * ux + z * uz, lateral = x * uz - z * ux;
-          if (actor.state === 'walking' && Math.abs(along) < 1.15 && Math.abs(lateral) < .3) {
+          if (actor.state === 'walking' && Math.abs(along) < 1.15 && Math.abs(lateral) < (crossing.halfWidth ?? .3)) {
             const ramp = Math.min(1, (1.15 - Math.abs(along)) / .2);
             bridgeLift = (.23 + Math.max(0, Math.cos(along * Math.PI / 1.9)) * .15) * ramp;
           }
@@ -1303,7 +1307,7 @@ export function createWorld(
     },
     zoom(f) {
       frameDirty = true;
-      camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 8);
+      camera.zoom = T.MathUtils.clamp(camera.zoom * f, 0.68, 14);
       camera.updateProjectionMatrix();
     },
     setPanMode(enabled) {
