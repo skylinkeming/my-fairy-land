@@ -59,9 +59,9 @@ test("all islands have connected walking routes that cross the existing bridge c
     }
 });
 test("walking residents move continuously and actually arrive on another island", () => {
-  const life = createResidentLife({ nodes, links, random: () => 0.1 });
+  const life = createResidentLife({ nodes, links, random: () => 0.1, count: 1 });
   assert.equal(life.mode, "wander");
-  assert.equal(life.actors.length, 6);
+  assert.equal(life.actors.length, 1);
   // Validate an uninterrupted crossing. Meeting a friend may now intentionally
   // replace a walker's destination rather than eventually resume this journey.
   const walker = life.actors.find(actor => actor.activity === "wander");
@@ -85,95 +85,37 @@ test("walking residents move continuously and actually arrive on another island"
     "at least one resident must finish crossing to another island",
   );
 });
-test("two residents ride the swings while others chat, daydream and wander", () => {
-  const life = createResidentLife({
-    nodes,
-    links,
-    previous: "wander",
-    random: () => 0.1,
-  });
-  assert.equal(life.mode, "swing");
-  life.update(0);
-  assert.ok(life.actors.filter(actor => actor.state === "swinging").every(actor => actor.yOffset > 0));
-  life.update(0.5);
-  const riders = life.actors.filter((a) => a.state === "swinging");
-  assert.equal(riders.length, 2);
-  assert.equal(life.actors.filter((a) => a.state === "chatting").length, 2);
-  assert.equal(life.actors.filter((a) => a.state === "daydreaming").length, 1);
-  assert.equal(life.actors.filter((a) => a.state === "walking").length, 1);
-  for (const rider of riders) {
-    assert.notEqual(rider.swingAngle, 0);
-    assert.ok(rider.yOffset > 0);
-    assert.equal(
-      rider.z,
-      PARK.z + PARK.seats[rider.slot].z + Math.sin(rider.swingAngle) * 1.75,
-    );
+test("residents start on separate random islands and explore independently", () => {
+  const starts = [];
+  for (const draw of [.1, .7]) {
+    const life = createResidentLife({nodes, links, random: () => draw});
+    assert.equal(new Set(life.actors.map(actor => actor.node)).size, 6);
+    assert.ok(life.actors.every(actor => actor.activity === 'wander' && actor.state === 'walking'));
+    assert.ok(life.actors.every(actor => life.navigation.walkable(actor)));
+    starts.push(life.actors.map(actor => actor.node).join(','));
+    const before = life.actors.map(actor => ({x: actor.x, z: actor.z}));
+    life.update(.8);
+    assert.ok(life.actors.every((actor, i) => Math.hypot(actor.x - before[i].x, actor.z - before[i].z) > .1));
   }
-});
-test("playing residents move together on the park lawn instead of staying fixed", () => {
-  const life = createResidentLife({
-    nodes,
-    links,
-    previous: "swing",
-    random: () => 0.99,
-  });
-  assert.equal(life.mode, "play");
-  const before = life.actors.map((a) => ({ x: a.x, z: a.z }));
-  life.update(0.8);
-  assert.equal(life.actors.filter(a => a.state === "playing").length, 2);
-  for (const [i, a] of life.actors.entries()) {
-    if (a.activity !== "play") continue;
-    assert.equal(a.state, "playing");
-    assert.ok(Math.hypot(a.x - before[i].x, a.z - before[i].z) > 0.1);
-    assert.ok(
-      Math.abs(
-        Math.hypot(a.x - PARK.x - PARK.play.x, a.z - PARK.z - PARK.play.z) -
-          1.2,
-      ) < 0.001,
-    );
-  }
+  assert.notEqual(starts[0], starts[1], 'the island assignments should vary with the random draw');
 });
 
-test("a mixed day has a walking pair, a seated chatting pair and a solitary forest resident", () => {
+test("only a pair occasionally meets while other residents continue their own activities", () => {
   const life = createResidentLife({nodes, links, random: () => .1});
-  life.update(0);
-  const pair = life.actors.filter(actor => actor.state === "strolling");
-  const seated = life.actors.filter(actor => actor.state === "chatting");
-  const solitary = life.actors.filter(actor => actor.state === "daydreaming");
-  assert.equal(pair.length, 2);
-  assert.equal(seated.length, 2);
-  assert.equal(solitary.length, 1);
-  assert.equal(pair[0].partner, pair[1].id);
-  assert.equal(seated[0].partner, seated[1].id);
-  assert.equal(solitary[0].partner, null);
-  assert.equal(solitary[0].x, PARK.x + PARK.forest.x);
-  assert.equal(solitary[0].z, PARK.z + PARK.forest.z);
-  // Keep the unrelated cross-island passerby outside this pair-coordination case;
-  // encounters with strangers are covered by the turn-apart and crowd tests.
-  const passerby = life.actors.find(actor => actor.activity === "wander");
-  Object.assign(passerby, {x: 4, z: 1, node: "home", state: "waiting", wait: 100});
-  assert.ok(Math.abs(Math.hypot(seated[0].x - seated[1].x, seated[0].z - seated[1].z) - 1.4) < 1e-6);
-  const seats = seated.map(actor => ({x: actor.x, z: actor.z}));
-  let near = false, far = false;
-  for (let i = 0; i < 200; i++) {
-    life.update(.1);
-    assert.ok(Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z) >= 1.18);
-    assert.ok(Math.abs(pair[0].z - pair[1].z) < .1, "companions walk alongside and wait for each other");
-    assert.ok(pair.every(actor => !actor.departure), "companions do not randomly flee each other");
-    for (const [j, actor] of seated.entries()) {
-      assert.equal(actor.x, seats[j].x);
-      assert.equal(actor.z, seats[j].z);
-      assert.ok(actor.yOffset > 0, "sit on the raised bench rather than on the ground");
+  let met = false, dispersed = false;
+  for (let frame = 0; frame < 4000; frame++) {
+    life.update(.05);
+    const social = life.actors.filter(actor => ['swinging', 'playing', 'chatting'].includes(actor.state));
+    assert.ok(social.length <= 2, 'do not schedule the whole household on the park');
+    if (social.length === 2) {
+      met = true;
+      assert.equal(social[0].partner, social[1].id);
+      assert.ok(life.actors.some(actor => actor.node !== social[0].node), 'others must remain on other islands');
     }
-    if (pair.every(actor => Math.abs(actor.z - PARK.z - PARK.stroll.near) < .1)) near = true;
-    if (pair.every(actor => Math.abs(actor.z - PARK.z - PARK.stroll.far) < .1)) far = true;
+    if (new Set(life.actors.map(actor => actor.node)).size >= 4) dispersed = true;
   }
-  assert.ok(near && far, "the pair must finish both legs of the walk");
-  const roles = life.actors.map(actor => actor.activity);
-  life.update(37);
-  assert.notEqual(life.mode, "wander");
-  assert.ok(life.actors.some((actor, i) => actor.activity !== roles[i]), "roles rotate over time");
-  assert.ok(life.descriptions().every(description => typeof description.label === "string"));
+  assert.ok(met, 'the pair must actually arrive and play, chat or swing');
+  assert.ok(dispersed, 'independent residents must not all converge on one island');
 });
 
 test("head-on walkers separate and continue away without overlapping or teleporting", () => {
@@ -286,4 +228,24 @@ test("opposite walkers take turns on a narrow bridge and both finish crossing", 
     if(b.node==="home")second=true;
   }
   assert.ok(first&&second,"neither walker should get stuck at a bridge entrance");
+});
+
+test('occasional walking companions meet and keep moving without gathering everyone', () => {
+  let walkedTogether = false;
+  for (let seed = 1; seed <= 5 && !walkedTogether; seed++) {
+    let value = seed;
+    const random = () => {value = (Math.imul(value, 1664525) + 1013904223) >>> 0; return value / 4294967296;};
+    const life = createResidentLife({nodes, links, random});
+    for (let frame = 0; frame < 4000; frame++) {
+      const before = life.actors.map(actor => actor.walkTime);
+      life.update(.08);
+      const pair = life.actors.filter(actor => actor.activity === 'pairwalk');
+      if (pair.length === 2 && pair[0].node === pair[1].node && Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z) < 3 && pair.every(actor => actor.walkTime > before[actor.id])) {
+        assert.equal(pair[0].partner, pair[1].id);
+        assert.ok(life.actors.some(actor => actor.node !== pair[0].node));
+        walkedTogether = true; break;
+      }
+    }
+  }
+  assert.ok(walkedTogether, 'retain the ability to occasionally go for a walk as a pair');
 });

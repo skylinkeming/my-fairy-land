@@ -1,8 +1,9 @@
+import { createResidentNavigation } from "./resident-navigation.js";
 // Activity and navigation logic is independent of the renderer so routes can be validated.
 export const ACTIVITY_LABELS = {
-  wander: "有的結伴散步，有的坐著聊天，也有的在樹林發呆",
-  swing: "有的盪鞦韆，有的在公園聊天，也有的獨自看風景",
-  play: "有的在公園玩耍，有的兩兩散步，也有的在樹林放空",
+  wander: "娃娃們分散在不同小島，各自散步、探索與看風景",
+  swing: "各自探索小島，偶爾相約盪鞦韆或坐下聊天",
+  play: "在不同島上自由散步，偶爾結伴玩球",
 };
 export function chooseActivity(previous, random = Math.random) {
   const choices = Object.keys(ACTIVITY_LABELS).filter(
@@ -40,7 +41,7 @@ export const PARK = {
   ],
   pusher: { x: 2.2, z: 5.1 },
   play: { x: -0.7, z: 3.7 },
-  chatBench: { x: 2.8, z: -1.4, heading: -.3, width: 2.9, height: .4 },
+  chatBench: { x: 2.8, z: -2.3, heading: -0.3, width: 2.9, height: 0.4 },
   stroll: { x: -1.8, near: -1.8, far: -4.5, spacing: 1.4 },
   forest: { x: -4.6, z: -2.25 },
 };
@@ -95,318 +96,690 @@ export function routeBetweenIslands(
       Math.hypot(p.x - points[i - 1].x, p.z - points[i - 1].z) > 0.001,
   );
 }
+const EMPTY_SCENERY = Object.freeze([]);
+const navigationCache = new WeakMap();
+function sharedNavigation(nodes, links, obstacles, crossings) {
+  const cached = navigationCache.get(nodes);
+  if (
+    cached &&
+    cached.links === links &&
+    cached.obstacles === obstacles &&
+    cached.crossings === crossings
+  )
+    return cached.value;
+  const value = createResidentNavigation({
+    nodes,
+    links,
+    obstacles,
+    crossings,
+  });
+  navigationCache.set(nodes, { links, obstacles, crossings, value });
+  return value;
+}
 export function createResidentLife({
   nodes,
   links,
   previous,
   random = Math.random,
   count = 6,
+  obstacles = EMPTY_SCENERY,
+  crossings = EMPTY_SCENERY,
 }) {
-  const indices = Array.from({ length: count }, (_, i) => i);
-  const order = [...indices].sort(() => random() - 0.5);
+  const navigation = sharedNavigation(nodes, links, obstacles, crossings);
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  function shuffled(values) {
+    const result = [...values];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.min(i, Math.floor(random() * (i + 1)));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
   let mode = chooseActivity(previous, random),
     elapsed = 0,
-    nextChange = 55 + random() * 15;
-  const initialMode = mode;
-  const park = nodes.find((n) => n.id === "park");
-  const randomIsland = (except) => {
-    const available = nodes.filter((n) => n.id !== except);
-    return available[
-      Math.floor(random() * available.length) % available.length
-    ];
-  };
-  const actors = indices.map((i) => ({
-    id: i,
-    slot: order[i],
-    phase: random() * Math.PI * 2,
-    x: 0,
-    z: 0,
-    yOffset: 0,
-    heading: 0,
-    node: "park",
-    state: "waiting",
-    goalMode: mode,
-    walkTime: 0,
-    playTime: 0,
-    swingTime: 2,
-    wait: 0,
-  }));
-  const paused = new Set();
-  let strollEnd = 0, strollPause = 0;
-  function assignActivities() {
-    const schedule = mode === "wander"
-      ? ["stroll", "stroll", "chat", "chat", "daydream", "wander"]
-      : mode === "swing"
-        ? ["swing", "swing", "chat", "chat", "daydream", "wander"]
-        : ["play", "play", "stroll", "stroll", "daydream", "wander"];
-    for (const actor of actors) {
-      actor.activity = schedule[actor.slot % schedule.length];
-      actor.partner = null;
-    }
-    for (const activity of ["stroll", "chat", "play"]) {
-      const pair = actors.filter(actor => actor.activity === activity);
-      if (pair.length === 2) {
-        pair[0].partner = pair[1].id;
-        pair[1].partner = pair[0].id;
-      }
-    }
-    strollEnd = 0;
-  }
-  const pairSide = actor => actor.id < (actor.partner ?? actor.id + 1) ? -1 : 1;
-  function strollPoint(actor, end = strollEnd) {
-    return {x: park.x + PARK.stroll.x + pairSide(actor) * PARK.stroll.spacing / 2,
-      z: park.z + (end ? PARK.stroll.far : PARK.stroll.near)};
-  }
-  function goal(actor) {
-    if (actor.activity === "wander") {
-      const n = randomIsland(actor.node);
-      const angle = actor.slot * Math.PI * 2 / count;
-      return { node: n.id, point: {
-        x: n.x + Math.sin(angle) * 1.35,
-        z: n.z + 1.6 + Math.cos(angle) * 1.35,
-      }, state: "waiting" };
-    }
-    if (actor.activity === "stroll")
-      return {node: "park", point: strollPoint(actor), state: "strolling"};
-    if (actor.activity === "chat") {
-      const bench = PARK.chatBench, offset = pairSide(actor) * .7;
-      return {node: "park", point: {
-        x: park.x + bench.x + Math.cos(bench.heading) * offset + Math.sin(bench.heading) * .13,
-        z: park.z + bench.z - Math.sin(bench.heading) * offset + Math.cos(bench.heading) * .13,
-      }, state: "chatting"};
-    }
-    if (actor.activity === "daydream")
-      return {node: "park", point: {x: park.x + PARK.forest.x, z: park.z + PARK.forest.z}, state: "daydreaming"};
-    if (actor.activity === "swing") {
-      const point = PARK.seats[actor.slot % 2];
-      return {node: "park", point: {x: park.x + point.x, z: park.z + point.z}, state: "swinging"};
-    }
-    const a = pairSide(actor) < 0 ? 0 : Math.PI;
-    return {node: "park", point: {
-      x: park.x + PARK.play.x + Math.cos(a) * 1.2,
-      z: park.z + PARK.play.z + Math.sin(a) * 1.2,
-    }, state: "playing"};
-  }
-  assignActivities();
-  function begin(actor) {
-    const target = goal(actor);
-    actor.departure = null;
-    actor.goalMode = mode;
-    actor.target = target;
-    actor.route = routeBetweenIslands(
-      actor.node,
-      target.node,
-      nodes,
-      links,
-      { x: actor.x, z: actor.z },
-      target.point,
-    );
-    actor.routeIndex = 1;
-    actor.state = "walking";
-    actor.yOffset = 0;
-    actor.swingAngle = 0;
-    actor.playTime = 0;
-    actor.swingTime = 0;
-  }
-  for (const actor of actors) {
-    if (actor.activity === "wander") {
-      // Unique starting islands prevent dolls from spawning inside one another.
-      const n = nodes[actor.slot % nodes.length];
-      actor.node = n.id;
-      actor.x = n.x;
-      actor.z = n.z + 1.6;
-      begin(actor);
-    } else {
-      const target = goal(actor);
-      actor.node = target.node;
-      actor.x = target.point.x;
-      actor.z = target.point.z;
-      actor.state = target.state;
-      actor.target = target;
-    }
+    nextChange = 50 + random() * 25;
+  const initialMode = mode,
+    park = nodes.find((node) => node.id === "park"),
+    paused = new Set();
+  const islands = shuffled(
+    nodes.filter((node) => navigation.islandCounts[node.id]),
+  );
+  if (!islands.length)
+    throw new Error("No collision-free walking area exists in the scene");
+  const actors = [];
+  for (let id = 0; id < count; id++) {
+    const node = islands[id % islands.length],
+      point = navigation.sample(node.id, random, actors);
+    if (!point) throw new Error(`No safe resident spawn on ${node.id}`);
+    actors.push({
+      id,
+      slot: id,
+      phase: random() * Math.PI * 2,
+      x: point.x,
+      z: point.z,
+      node: node.id,
+      yOffset: 0,
+      heading: 0,
+      state: "waiting",
+      activity: "wander",
+      partner: null,
+      goalMode: mode,
+      walkTime: 0,
+      playTime: 0,
+      swingTime: 0,
+      swingAngle: 0,
+      wait: 0,
+      blockedTime: 0,
+    });
   }
   const bridges = links.map(([aId, bId]) => {
-    const a = nodes.find(node => node.id === aId), b = nodes.find(node => node.id === bId);
-    const length = Math.hypot(b.x - a.x, b.z - a.z);
-    const dx = (b.x - a.x) / length, dz = (b.z - a.z) / length;
-    return { x: a.x + dx * 5.64, z: a.z + dz * 5.64, dx, dz,
-      length: Math.max(.01, length - 11.28), owner: null };
+    const a = nodes.find((node) => node.id === aId),
+      b = nodes.find((node) => node.id === bId);
+    const length = distance(a, b),
+      dx = (b.x - a.x) / length,
+      dz = (b.z - a.z) / length;
+    return {
+      x: a.x + dx * 5.64,
+      z: a.z + dz * 5.64,
+      dx,
+      dz,
+      length: Math.max(0.01, length - 11.28),
+      owner: null,
+    };
   });
-  function inBridge(point, bridge, margin = 0, width = .36) {
-    const x = point.x - bridge.x, z = point.z - bridge.z;
-    const along = x * bridge.dx + z * bridge.dz;
-    return along >= -margin && along <= bridge.length + margin &&
-      Math.abs(x * bridge.dz - z * bridge.dx) <= width;
+  function inBridge(point, bridge, margin = 0, width = 0.36) {
+    const x = point.x - bridge.x,
+      z = point.z - bridge.z,
+      along = x * bridge.dx + z * bridge.dz;
+    return (
+      along >= -margin &&
+      along <= bridge.length + margin &&
+      Math.abs(x * bridge.dz - z * bridge.dx) <= width
+    );
   }
-  function onGround(point) {
-    return nodes.some(node => Math.hypot(point.x - node.x, point.z - node.z) <= 6) ||
-      bridges.some(bridge => inBridge(point, bridge));
+  let gathering = null;
+  function occupancy(id) {
+    return actors.filter(
+      (actor) => actor.node === id || actor.target?.node === id,
+    ).length;
+  }
+  function wanderGoal(actor) {
+    const current = nodes.find((node) => node.id === actor.node);
+    const other = shuffled(
+      nodes.filter(
+        (node) =>
+          navigation.islandCounts[node.id] &&
+          node.id !== actor.node &&
+          occupancy(node.id) < 3,
+      ),
+    );
+    const destination =
+      random() < 0.55 && current ? current : other[0] || current || islands[0];
+    const avoid = actors.filter((other) => other !== actor);
+    if (destination.id === actor.node) avoid.push(actor);
+    const point =
+      navigation.sample(destination.id, random, avoid) ||
+      navigation.nearest(destination, destination.id);
+    return { node: destination.id, point, state: "waiting" };
+  }
+  function goal(actor) {
+    if (actor.activity === "wander") return wanderGoal(actor);
+    if (actor.activity === "daydream") {
+      const node = nodes.find((node) => node.id === actor.node);
+      const point = navigation.nearest(
+        { x: node.x - 3.5, z: node.z + 1 },
+        node.id,
+        actors.filter((other) => other !== actor),
+      );
+      return { node: node.id, point, state: "daydreaming" };
+    }
+    if (actor.activity === "swing") {
+      const seat = PARK.seats[actor.slot];
+      return {
+        node: "park",
+        point: { x: park.x + seat.x, z: park.z + seat.z },
+        state: "swinging",
+      };
+    }
+    if (actor.activity === "chat") {
+      const bench = PARK.chatBench,
+        offset = actor.slot ? 0.7 : -0.7;
+      const point = {
+        x:
+          park.x +
+          bench.x +
+          Math.cos(bench.heading) * offset +
+          Math.sin(bench.heading) * 0.13,
+        z:
+          park.z +
+          bench.z -
+          Math.sin(bench.heading) * offset +
+          Math.cos(bench.heading) * 0.13,
+      };
+      const approach = navigation.nearest(
+        {
+          x: point.x + Math.sin(bench.heading) * 1.25,
+          z: point.z + Math.cos(bench.heading) * 1.25,
+        },
+        "park",
+      );
+      return {
+        node: "park",
+        point,
+        approach,
+        ignore: "park-chat-bench",
+        state: "chatting",
+      };
+    }
+    return {
+      node: gathering.node,
+      point: gathering.points[actor.slot],
+      state: actor.activity === "pairwalk" ? "pair-waiting" : "playing",
+    };
+  }
+  function begin(actor) {
+    const oldTarget = actor.target;
+    if (oldTarget?.ignore && oldTarget.approach && !navigation.walkable(actor))
+      actor.exitObstacle = { id: oldTarget.ignore, point: oldTarget.approach };
+    const origin = actor.exitObstacle?.point || actor;
+    let target = goal(actor),
+      route =
+        target.point &&
+        navigation.route(origin, target.approach || target.point);
+    if (route && target.approach) {
+      if (navigation.clearSegment(target.approach, target.point, target.ignore))
+        route.push(target.point);
+      else route = null;
+    }
+    if (!route) {
+      actor.activity = "wander";
+      actor.partner = null;
+      target = wanderGoal(actor);
+      route = target.point && navigation.route(origin, target.point);
+    }
+    if (route && actor.exitObstacle) route.unshift({ x: actor.x, z: actor.z });
+    actor.departure = null;
+    actor.bridgeYield = null;
+    actor.goalMode = mode;
+    actor.target = target;
+    actor.route = route || [{ x: actor.x, z: actor.z }];
+    actor.routeIndex = 1;
+    actor.state = route ? "walking" : "waiting";
+    actor.wait = 2;
+    actor.yOffset = 0;
+    actor.swingAngle = 0;
+    actor.swingTime = 0;
+    actor.playTime = 0;
+  }
+  function planGathering() {
+    actors.forEach((actor) => {
+      actor.activity = "wander";
+      actor.partner = null;
+    });
+    gathering = null;
+    if (mode === "wander" || actors.length < 2) return;
+    let pair = shuffled(actors).slice(0, 2);
+    const activity =
+      mode === "swing"
+        ? random() < 0.5
+          ? "swing"
+          : "chat"
+        : random() < 0.3
+          ? "pairwalk"
+          : "play";
+    const localPair = activity === "play" || activity === "pairwalk";
+    if (localPair)
+      pair[1] = [...actors]
+        .filter((actor) => actor !== pair[0])
+        .sort((a, b) => distance(a, pair[0]) - distance(b, pair[0]))[0];
+    else
+      pair = [...actors]
+        .sort((a, b) => distance(a, park) - distance(b, park))
+        .slice(0, 2);
+    const meetingNode = localPair ? pair[0].node : "park";
+    const angle = random() * Math.PI * 2;
+    const first = localPair
+      ? navigation.nearest(
+          {
+            x: pair[0].x + Math.sin(angle) * 1.5,
+            z: pair[0].z + Math.cos(angle) * 1.5,
+          },
+          meetingNode,
+        )
+      : navigation.sample(meetingNode, random);
+    let second = null;
+    if (localPair && first)
+      for (let i = 0; i < 32; i++) {
+        const angle = random() * Math.PI * 2 + i * 2.4;
+        const candidate = navigation.nearest(
+          {
+            x: first.x + Math.sin(angle) * 1.8,
+            z: first.z + Math.cos(angle) * 1.8,
+          },
+          meetingNode,
+          [first],
+        );
+        if (
+          candidate &&
+          distance(first, candidate) <= 2.5 &&
+          navigation.clearSegment(first, candidate)
+        ) {
+          second = candidate;
+          break;
+        }
+      }
+    if (localPair && !second) return;
+    gathering = {
+      ids: pair.map((actor) => actor.id),
+      node: meetingNode,
+      points: [first, second],
+      until: null,
+    };
+    pair.forEach((actor, slot) => {
+      actor.activity = activity;
+      actor.slot = slot;
+      actor.partner = pair[1 - slot].id;
+    });
+    const quiet = actors.find((actor) => !pair.includes(actor));
+    if (quiet) quiet.activity = "daydream";
+  }
+  actors.forEach(begin);
+  function ignoredObstacle(actor) {
+    if (actor.exitObstacle) return actor.exitObstacle.id;
+    return actor.target?.ignore &&
+      (actor.state === "chatting" ||
+        actor.routeIndex === actor.route.length - 1)
+      ? actor.target.ignore
+      : null;
   }
   function safeStep(actor, destination) {
-    if (!onGround(destination)) return false;
-    if (actors.some(other => other !== actor &&
-      Math.hypot(destination.x - other.x, destination.z - other.z) < RESIDENT_SPACING - 1e-8))
+    if (!navigation.clearSegment(actor, destination, ignoredObstacle(actor)))
       return false;
-    return bridges.every(bridge => !inBridge(destination, bridge, 1.25, .75) ||
-      bridge.owner === null || bridge.owner === actor.id);
-  }
-  function moveWalker(actor, next, distance) {
-    const dx = next.x - actor.x, dz = next.z - actor.z, remaining = Math.hypot(dx, dz);
-    if (remaining < 1e-6) return true;
-    const step = Math.min(distance, remaining);
-    let heading = Math.atan2(dx, dz), aligning = false;
-    // A yielding walker may be beside a bridge landing. Rejoin its centre line
-    // before crossing so the island's curved shoreline cannot trap it at a corner.
-    for (const bridge of bridges) if (inBridge(actor, bridge, 1.5, .85)) {
-      const lateral = (actor.x - bridge.x) * bridge.dz - (actor.z - bridge.z) * bridge.dx;
-      const along = (actor.x - bridge.x) * bridge.dx + (actor.z - bridge.z) * bridge.dz;
-      const targetAlong = (next.x - bridge.x) * bridge.dx + (next.z - bridge.z) * bridge.dz;
-      if (Math.abs(lateral) > .15 && ((along < bridge.length / 2 && targetAlong > along) ||
-        (along >= bridge.length / 2 && targetAlong < along))) {
-        heading = Math.atan2(-lateral * bridge.dz, lateral * bridge.dx);
-        aligning = true;
-        break;
+    if (
+      actors.some(
+        (other) =>
+          other !== actor &&
+          distance(destination, other) < RESIDENT_SPACING - 1e-8,
+      )
+    )
+      return false;
+    return bridges.every((bridge) => {
+      if (
+        !inBridge(destination, bridge, 0.3, 0.3) ||
+        bridge.owner === null ||
+        bridge.owner === actor.id
+      )
+        return true;
+      const along = (point) =>
+        (point.x - bridge.x) * bridge.dx + (point.z - bridge.z) * bridge.dz;
+      const lateral = (point) =>
+        (point.x - bridge.x) * bridge.dz - (point.z - bridge.z) * bridge.dx;
+      const position = along(actor),
+        next = along(destination);
+      // A doll waiting at a landing must be able to step back or aside so the
+      // bridge owner can exit; the reservation must never imprison its queue.
+      if (position < -0.02 || position > bridge.length + 0.02) {
+        return (
+          Math.abs(next - bridge.length / 2) >
+            Math.abs(position - bridge.length / 2) ||
+          Math.abs(lateral(destination)) > Math.abs(lateral(actor)) + 1e-8
+        );
       }
-    }
-    // Right-first sidesteps are reciprocal: approaching dolls choose opposite sides.
-    for (const turn of [0, .5, -.5, 1, -1, Math.PI / 2, -Math.PI / 2, 2.2, -2.2, Math.PI]) {
-      const candidate = !aligning && turn === 0 && remaining <= distance ? {x: next.x, z: next.z} : {
-        x: actor.x + Math.sin(heading + turn) * step,
-        z: actor.z + Math.cos(heading + turn) * step,
-      };
-      if (!safeStep(actor, candidate)) continue;
-      actor.x = candidate.x; actor.z = candidate.z;
+      return false;
+    });
+  }
+  function moveWalker(actor, next, amount) {
+    const remaining = distance(actor, next);
+    if (remaining < 1e-6) return true;
+    const step = Math.min(amount, remaining);
+    let heading = Math.atan2(next.x - actor.x, next.z - actor.z),
+      aligning = false;
+    for (const bridge of bridges)
+      if (inBridge(actor, bridge, 0.8, 0.8)) {
+        const lateral =
+          (actor.x - bridge.x) * bridge.dz - (actor.z - bridge.z) * bridge.dx;
+        const along =
+          (actor.x - bridge.x) * bridge.dx + (actor.z - bridge.z) * bridge.dz;
+        const targetAlong =
+          (next.x - bridge.x) * bridge.dx + (next.z - bridge.z) * bridge.dz;
+        if (
+          Math.abs(lateral) > 0.12 &&
+          ((along < bridge.length / 2 && targetAlong > along) ||
+            (along >= bridge.length / 2 && targetAlong < along))
+        ) {
+          heading = Math.atan2(-lateral * bridge.dz, lateral * bridge.dx);
+          aligning = true;
+          break;
+        }
+      }
+    for (const turn of [
+      0,
+      0.45,
+      -0.45,
+      0.9,
+      -0.9,
+      Math.PI / 2,
+      -Math.PI / 2,
+      2.2,
+      -2.2,
+      Math.PI,
+    ]) {
+      const point =
+        !aligning && turn === 0 && remaining <= amount
+          ? next
+          : {
+              x: actor.x + Math.sin(heading + turn) * step,
+              z: actor.z + Math.cos(heading + turn) * step,
+            };
+      if (!safeStep(actor, point)) continue;
+      actor.x = point.x;
+      actor.z = point.z;
       actor.heading = heading + turn;
-      actor.walkTime += distance / .95;
+      actor.walkTime += step / 0.95;
       actor.yielding = turn !== 0;
-      for (const bridge of bridges) if (inBridge(actor, bridge, 1.25, .75)) bridge.owner = actor.id;
-      return !aligning && turn === 0 && remaining <= distance;
+      const island = nodes.find((node) => distance(actor, node) <= 6);
+      if (island) actor.node = island.id;
+      for (const bridge of bridges)
+        if (
+          inBridge(actor, bridge, 0.25, 0.3) &&
+          (bridge.owner === null || bridge.owner === actor.id)
+        )
+          bridge.owner = actor.id;
+      return !aligning && turn === 0 && remaining <= amount;
     }
     actor.yielding = true;
     return false;
   }
   function turnApart() {
-    for (let i = 0; i < actors.length; i++) for (let j = i + 1; j < actors.length; j++) {
-      const a = actors[i], b = actors[j];
-      if (a.partner === b.id && a.activity === b.activity) continue;
-      if (a.state !== "walking" && a.state !== "strolling" && b.state !== "walking" && b.state !== "strolling") continue;
-      if ([a, b].some(actor => elapsed < (actor.turnCooldown || 0))) continue;
-      // Keep bridge traffic on its safe, single-file route.
-      if (bridges.some(bridge => inBridge(a, bridge, 1.5, 1) || inBridge(b, bridge, 1.5, 1))) continue;
-      const dx = b.x - a.x, dz = b.z - a.z, gap = Math.hypot(dx, dz);
-      if (gap > 1.9 || gap < 1e-6) continue;
-      const approaching = actor => {
-        if (paused.has(actor.id)) return false;
-        const next = actor.departure ? {
-          x: actor.x + Math.sin(actor.departure.heading),
-          z: actor.z + Math.cos(actor.departure.heading),
-        } : actor.state === "strolling" ? strollPoint(actor) : actor.route?.[actor.routeIndex];
-        if ((actor.state !== "walking" && actor.state !== "strolling") || !next) return false;
-        const other = actor === a ? b : a;
-        return (next.x - actor.x) * (other.x - actor.x) +
-          (next.z - actor.z) * (other.z - actor.z) > 0;
-      };
-      if (!approaching(a) && !approaching(b)) continue;
-      for (const [actor, other] of [[a, b], [b, a]]) {
-        if (paused.has(actor.id)) continue;
-        if (actor.state !== "walking" && actor.state !== "strolling") continue;
-        const away = Math.atan2(actor.x - other.x, actor.z - other.z);
-        const variation = (random() - .5) * 1.1;
-        // Try both sides at a shoreline; never send a doll into the sea.
-        for (const offset of [variation, -variation, 0]) {
-          const heading = away + offset;
-          const point = {x: actor.x + Math.sin(heading) * 1.4,
-            z: actor.z + Math.cos(heading) * 1.4};
-          if (!onGround(point) || bridges.some(bridge => inBridge(point, bridge, 1.5, 1))) continue;
-          // This is a new walk, not a temporary sidestep back to the old goal.
-          const walkers = [actor];
-          if (actor.activity === "stroll" && actor.partner !== null) {
-            const companion = actors.find(candidate => candidate.id === actor.partner);
-            if (companion?.activity === "stroll" && !paused.has(companion.id)) walkers.push(companion);
+    for (let i = 0; i < actors.length; i++)
+      for (let j = i + 1; j < actors.length; j++) {
+        const a = actors[i],
+          b = actors[j];
+        if (
+          a.partner === b.id ||
+          [a, b].some((actor) => elapsed < (actor.turnCooldown || 0))
+        )
+          continue;
+        if (
+          distance(a, b) > 1.9 ||
+          bridges.some(
+            (bridge) =>
+              inBridge(a, bridge, 1.5, 1) || inBridge(b, bridge, 1.5, 1),
+          )
+        )
+          continue;
+        const approaching = (actor) => {
+          if (paused.has(actor.id) || actor.state !== "walking") return false;
+          const other = actor === a ? b : a,
+            next = actor.departure
+              ? {
+                  x: actor.x + Math.sin(actor.departure.heading),
+                  z: actor.z + Math.cos(actor.departure.heading),
+                }
+              : actor.route[actor.routeIndex];
+          return (
+            next &&
+            (next.x - actor.x) * (other.x - actor.x) +
+              (next.z - actor.z) * (other.z - actor.z) >
+              0
+          );
+        };
+        if (!approaching(a) && !approaching(b)) continue;
+        for (const [actor, other] of [
+          [a, b],
+          [b, a],
+        ]) {
+          if (
+            actor.state !== "walking" ||
+            paused.has(actor.id) ||
+            actor.exitObstacle ||
+            (actor.target?.ignore && !navigation.walkable(actor))
+          )
+            continue;
+          const away = Math.atan2(actor.x - other.x, actor.z - other.z),
+            variation = (random() - 0.5) * 1.1;
+          for (const offset of [variation, -variation, 0]) {
+            const heading = away + offset,
+              point = {
+                x: actor.x + Math.sin(heading) * 1.4,
+                z: actor.z + Math.cos(heading) * 1.4,
+              };
+            if (
+              !navigation.clearSegment(actor, point) ||
+              bridges.some((bridge) => inBridge(point, bridge, 1.5, 1))
+            )
+              continue;
+            actor.departure = { heading };
+            actor.route = [];
+            actor.routeIndex = 0;
+            actor.target = null;
+            actor.goalMode = mode;
+            actor.turnCooldown = elapsed + 5;
+            break;
           }
-          for (const walker of walkers) {
-            walker.departure = {heading};
-            walker.route = [];
-            walker.routeIndex = 0;
-            walker.target = null;
-            walker.state = "walking";
-            walker.goalMode = mode;
-            walker.turnCooldown = elapsed + 5;
-          }
-          break;
         }
       }
-    }
   }
   function step(dt) {
-
     elapsed += dt;
-    // Other dolls carry on; role swaps wait until the visit ends.
     if (paused.size) nextChange += dt;
     if (elapsed >= nextChange) {
       mode = chooseActivity(mode, random);
-      // Rotate companions and roles, rather than keeping the same dolls together.
-      const slots = [...indices];
-      for (let i = slots.length - 1; i > 0; i--) {
-        const j = Math.min(i, Math.floor(random() * (i + 1)));
-        [slots[i], slots[j]] = [slots[j], slots[i]];
+      planGathering();
+      nextChange = elapsed + (mode === "wander" ? 80 : 110) + random() * 30;
+      actors.forEach((actor) => {
+        if (!paused.has(actor.id)) begin(actor);
+      });
+    }
+    if (gathering && !paused.size) {
+      const pair = gathering.ids.map((id) => actors[id]);
+      if (
+        pair.some((actor) => actor.departure || actor.activity === "wander")
+      ) {
+        for (const actor of pair) {
+          actor.activity = "wander";
+          actor.partner = null;
+          if (!actor.departure) begin(actor);
+        }
+        gathering = null;
+        nextChange = Math.min(nextChange, elapsed + 20 + random() * 15);
       }
-      actors.forEach((actor, i) => { actor.slot = slots[i]; });
-      assignActivities();
-      nextChange = elapsed + 55 + random() * 15;
+      if (gathering) {
+        if (
+          !gathering.until &&
+          pair.every((actor) =>
+            ["playing", "swinging", "chatting", "pair-waiting"].includes(
+              actor.state,
+            ),
+          )
+        )
+          gathering.until = elapsed + 30 + random() * 15;
+        if (
+          pair.every((actor) => actor.state === "pair-waiting") &&
+          elapsed >= (gathering.nextWalkTry || 0)
+        ) {
+          gathering.nextWalkTry = elapsed + 1;
+          const first = navigation.sample(gathering.node, random, pair);
+          if (first)
+            for (let i = 0; i < 16; i++) {
+              const angle = random() * Math.PI * 2 + i * 2.4;
+              const second = navigation.nearest(
+                {
+                  x: first.x + Math.sin(angle) * 1.6,
+                  z: first.z + Math.cos(angle) * 1.6,
+                },
+                gathering.node,
+                [first],
+              );
+              if (
+                !second ||
+                distance(first, second) > 2.5 ||
+                !navigation.clearSegment(first, second)
+              )
+                continue;
+              if (
+                !navigation.route(pair[0], first) ||
+                !navigation.route(pair[1], second)
+              )
+                continue;
+              gathering.points = [first, second];
+              pair.forEach(begin);
+              break;
+            }
+        }
+        if (gathering.until && elapsed > gathering.until) {
+          pair.forEach((actor) => {
+            actor.activity = "wander";
+            actor.partner = null;
+            begin(actor);
+          });
+          gathering = null;
+        }
+      }
     }
     for (const bridge of bridges) {
-      const owner = actors.find(actor => actor.id === bridge.owner);
-      if (!owner || !inBridge(owner, bridge, 1.4, .85)) bridge.owner = null;
+      const owner = actors.find((actor) => actor.id === bridge.owner);
+      if (!owner || !inBridge(owner, bridge, 0.35, 0.35)) bridge.owner = null;
     }
-    turnApart();
-    for (const actor of [...actors].sort((a, b) => Number(a.state === "walking" || a.state === "strolling") - Number(b.state === "walking" || b.state === "strolling"))) {
-      if (paused.has(actor.id)) continue;
-      const before = {x: actor.x, z: actor.z, yOffset: actor.yOffset,
-        heading: actor.heading, swingAngle: actor.swingAngle,
-        swingTime: actor.swingTime, playTime: actor.playTime};
-      actor.yOffset = 0;
-      actor.swingAngle = 0;
-      if (actor.goalMode !== mode && (actor.state !== "walking" || actor.departure)) begin(actor);
-      if (actor.state === "walking") {
-        if (actor.departure) {
-          const heading = actor.departure.heading;
-          moveWalker(actor, {x: actor.x + Math.sin(heading), z: actor.z + Math.cos(heading)}, dt * .95);
-          // Keep the direction actually taken, including natural turns at shorelines.
-          actor.departure.heading = actor.heading;
-          const island = nodes.find(node => Math.hypot(actor.x - node.x, actor.z - node.z) <= 6);
-          if (island) actor.node = island.id;
-        } else {
-          const next = actor.route[actor.routeIndex];
-          if (next && moveWalker(actor, next, dt * .95)) actor.routeIndex++;
-          if (actor.routeIndex >= actor.route.length) {
-            actor.node = actor.target.node;
-            actor.state = actor.target.state;
-            actor.wait = 1.5 + random() * 3;
-            actor.playTime = 0;
+    // Queue on the island, not on the narrow landing: leave room for the owner
+    // to exit before trying to cross in the opposite direction.
+    for (const actor of actors) {
+      if (
+        paused.has(actor.id) ||
+        actor.state !== "walking" ||
+        actor.bridgeYield
+      )
+        continue;
+      for (let index = 0; index < bridges.length; index++) {
+        const bridge = bridges[index];
+        if (
+          bridge.owner === null ||
+          bridge.owner === actor.id ||
+          !inBridge(actor, bridge, 1, 0.65)
+        )
+          continue;
+        const along =
+          (actor.x - bridge.x) * bridge.dx + (actor.z - bridge.z) * bridge.dz;
+        if (along >= 0 && along <= bridge.length) continue;
+        const side = along < 0 ? -1 : 1;
+        const endpoint =
+          side < 0
+            ? { x: bridge.x, z: bridge.z }
+            : {
+                x: bridge.x + bridge.dx * bridge.length,
+                z: bridge.z + bridge.dz * bridge.length,
+              };
+        const island = nodes.find((node) => distance(actor, node) <= 6);
+        if (!island) continue;
+        for (const lateral of [1.4, -1.4]) {
+          const desired = {
+            x: endpoint.x + bridge.dx * side * 1.6 + bridge.dz * lateral,
+            z: endpoint.z + bridge.dz * side * 1.6 - bridge.dx * lateral,
+          };
+          const point = navigation.nearest(
+            desired,
+            island.id,
+            actors.filter((other) => other !== actor),
+          );
+          const route = point && navigation.route(actor, point);
+          if (route) {
+            actor.bridgeYield = { bridge: index, route, index: 1 };
+            break;
           }
         }
+        if (actor.bridgeYield) break;
+      }
+    }
+    turnApart();
+    for (const actor of actors) {
+      if (paused.has(actor.id)) continue;
+      if (actor.exitObstacle && navigation.walkable(actor))
+        actor.exitObstacle = null;
+      const previousPose = {
+        x: actor.x,
+        z: actor.z,
+        yOffset: actor.yOffset,
+        heading: actor.heading,
+        swingAngle: actor.swingAngle,
+        swingTime: actor.swingTime,
+      };
+      actor.yOffset = 0;
+      actor.swingAngle = 0;
+      if (actor.state === "walking") {
+        if (actor.bridgeYield) {
+          const queue = actor.bridgeYield,
+            next = queue.route[queue.index];
+          if (next && moveWalker(actor, next, dt * 0.95)) queue.index++;
+          if (
+            queue.index >= queue.route.length &&
+            bridges[queue.bridge].owner === null
+          ) {
+            actor.bridgeYield = null;
+            if (actor.target) {
+              const route = navigation.route(
+                actor,
+                actor.target.approach || actor.target.point,
+              );
+              if (route) {
+                if (actor.target.approach) route.push(actor.target.point);
+                actor.route = route;
+                actor.routeIndex = 1;
+              }
+            }
+          }
+        } else if (actor.departure) {
+          const heading = actor.departure.heading;
+          moveWalker(
+            actor,
+            { x: actor.x + Math.sin(heading), z: actor.z + Math.cos(heading) },
+            dt * 0.95,
+          );
+          actor.departure.heading = actor.heading;
+        } else {
+          const next = actor.route[actor.routeIndex];
+          if (next && moveWalker(actor, next, dt * 0.95)) actor.routeIndex++;
+          if (actor.routeIndex >= actor.route.length) {
+            actor.state = actor.target.state;
+            actor.node = actor.target.node;
+            actor.wait =
+              actor.state === "daydreaming"
+                ? 20 + random() * 15
+                : 2 + random() * 5;
+            actor.playTime = 0;
+          } else if (
+            next &&
+            actor.yielding &&
+            !navigation.clearSegment(actor, next, ignoredObstacle(actor))
+          ) {
+            actor.blockedTime += dt;
+            if (actor.blockedTime > 0.6) {
+              const target = actor.target.approach || actor.target.point,
+                path = actor.exitObstacle
+                  ? null
+                  : navigation.route(actor, target);
+              if (path) {
+                if (actor.target.approach) path.push(actor.target.point);
+                actor.route = path;
+                actor.routeIndex = 1;
+              }
+              actor.blockedTime = 0;
+            }
+          } else actor.blockedTime = 0;
+        }
         actor.yOffset = Math.abs(Math.sin(actor.walkTime * 8)) * 0.04;
-      } else if (actor.state === "strolling") {
-        const next = strollPoint(actor);
-        const companion = actors.find(other => other.id === actor.partner);
-        const partnerGoal = companion && strollPoint(companion);
-        const waitingForPartner = companion &&
-          (companion.state !== "strolling" ||
-          Math.hypot(actor.x - next.x, actor.z - next.z) + .08 <
-          Math.hypot(companion.x - partnerGoal.x, companion.z - partnerGoal.z));
-        if (!waitingForPartner) moveWalker(actor, next, dt * .72);
-        actor.yOffset = Math.abs(Math.sin(actor.walkTime * 8)) * .025;
-      } else if (actor.state === "chatting") {
-        actor.yOffset = PARK.chatBench.height - .85 * .43;
-        // Seated bodies stay over the bench while a small turn suggests conversation.
-        actor.heading = PARK.chatBench.heading - pairSide(actor) * .22 + Math.sin(elapsed * .65 + actor.phase) * .06;
-      } else if (actor.state === "daydreaming") {
-        actor.heading = -.7 + Math.sin(elapsed * .22 + actor.phase) * .12;
-        actor.yOffset = Math.sin(elapsed * .8 + actor.phase) * .008;
-      } else if (actor.state === "waiting") {
+      } else if (actor.state === "waiting" || actor.state === "daydreaming") {
         actor.wait -= dt;
+        if (actor.state === "daydreaming") {
+          actor.heading += Math.sin(elapsed * 0.2 + actor.phase) * dt * 0.04;
+          if (actor.wait <= 0) actor.activity = "wander";
+        }
         if (actor.wait <= 0) begin(actor);
+      } else if (actor.state === "chatting") {
+        actor.yOffset = PARK.chatBench.height - 0.85 * 0.43;
+        actor.heading =
+          PARK.chatBench.heading +
+          (actor.slot ? -0.22 : 0.22) +
+          Math.sin(elapsed * 0.65 + actor.phase) * 0.06;
       } else if (actor.state === "swinging") {
         actor.swingTime += dt;
         actor.swingAngle =
@@ -418,66 +791,69 @@ export function createResidentLife({
           park.z + PARK.seats[actor.slot].z + Math.sin(actor.swingAngle) * 1.75;
         actor.yOffset = 2.8 - Math.cos(actor.swingAngle) * 1.75 - 0.1;
         actor.heading = 0;
-      } else if (actor.state === "pushing") {
-        actor.heading = Math.atan2(park.x + 2.2 - actor.x, park.z + 3.8 - actor.z);
-        actor.yOffset = Math.max(0, Math.sin(elapsed * 1.7)) * 0.04;
+        if (
+          !navigation.walkable(actor) ||
+          actors.some(
+            (other) =>
+              other !== actor && distance(actor, other) < RESIDENT_SPACING,
+          )
+        )
+          Object.assign(actor, previousPose);
       } else if (actor.state === "playing") {
         actor.playTime += dt;
-        const a = actor.playTime * 0.62 + (pairSide(actor) < 0 ? 0 : Math.PI);
-        actor.x = park.x + PARK.play.x + Math.cos(a) * 1.2;
-        actor.z = park.z + PARK.play.z + Math.sin(a) * 1.2;
-        actor.heading = -a;
+        const partner = actors[actor.partner];
+        if (partner)
+          actor.heading = Math.atan2(partner.x - actor.x, partner.z - actor.z);
         actor.yOffset =
-          Math.abs(Math.sin(actor.playTime * 5 + actor.slot)) * 0.17;
+          Math.abs(Math.sin(actor.playTime * 3 + actor.phase)) * 0.08;
       }
-      // A moving swing or playmate also yields to a walker crossing nearby.
-      // Roll back its activity clock too, keeping the swing rig in sync.
-      if (actor.state !== "walking" && actors.some(other => other !== actor &&
-        Math.hypot(actor.x - other.x, actor.z - other.z) < RESIDENT_SPACING - 1e-8))
-        Object.assign(actor, before);
     }
-    const companions = actors.filter(actor => actor.activity === "stroll");
-    if (companions.length === 2 && companions.every(actor => !paused.has(actor.id) && actor.state === "strolling" &&
-      Math.hypot(actor.x - strollPoint(actor).x, actor.z - strollPoint(actor).z) < .05)) {
-      strollPause += dt;
-      if (strollPause >= 1) { strollEnd = 1 - strollEnd; strollPause = 0; }
-    } else strollPause = 0;
   }
   function update(dt) {
-    // Small steps prevent a delayed frame from tunnelling through another doll.
     let remaining = Math.max(0, dt);
-    if (remaining === 0) step(0);
+    if (!remaining) step(0);
     while (remaining > 1e-9) {
-      const slice = Math.min(.025, remaining);
+      const slice = Math.min(0.025, remaining);
       step(slice);
       remaining -= slice;
     }
   }
-  function descriptions() {
-    return actors.map((actor) => ({
-      state: actor.state,
-      label: paused.has(actor.id) ? "停下來和你打招呼" : {
-        walking: actor.activity === "stroll" ? (actor.departure ? "和朋友兩兩散步中" : "去找朋友一起散步") :
-          actor.activity === "chat" ? "前往公園椅子聊天" :
-          actor.activity === "daydream" ? "去樹林裡放空" : "跨島散步中",
-        strolling: "和朋友兩兩散步中",
-        chatting: "坐在公園椅子上聊天",
-        daydreaming: "獨自在樹林裡發呆",
-        waiting: "在島上看風景",
-        swinging: "在公園盪鞦韆",
-        pushing: "陪朋友一起盪鞦韆",
-        playing: "在公園一起玩球",
-      }[actor.state],
-    }));
-  }
   return {
     actors,
-    pause(index) { if (actors[index]) paused.add(actors[index].id); },
-    resume(index) { if (actors[index]) paused.delete(actors[index].id); },
-    isPaused(index) { return actors[index] ? paused.has(actors[index].id) : false; },
+    navigation,
     update,
-    descriptions,
     initialMode,
+    pause(index) {
+      if (actors[index]) paused.add(index);
+    },
+    resume(index) {
+      if (actors[index]) paused.delete(index);
+    },
+    isPaused(index) {
+      return paused.has(index);
+    },
+    descriptions() {
+      return actors.map((actor) => ({
+        state: actor.state,
+        island: actor.node,
+        label: paused.has(actor.id)
+          ? "停下來和你打招呼"
+          : {
+              walking:
+                actor.departure || actor.activity === "wander"
+                  ? "自在散步、探索小島中"
+                  : actor.activity === "pairwalk"
+                    ? "和朋友兩兩散步中"
+                    : "去找朋友一起玩",
+              waiting: "在島上看風景",
+              "pair-waiting": "等朋友一起散步",
+              daydreaming: "獨自在樹林裡發呆",
+              chatting: "坐在公園椅子上聊天",
+              swinging: "在公園盪鞦韆",
+              playing: "和朋友一起玩球",
+            }[actor.state],
+      }));
+    },
     get mode() {
       return mode;
     },

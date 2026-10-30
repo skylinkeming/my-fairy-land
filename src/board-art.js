@@ -216,6 +216,7 @@ export function decorateBoardTile(group, theme, { box, ball, cyl, mesh, top }) {
   );
   group.add(token);
   token.name = "board-number-token";
+  token.userData.walkObstacle = true;
   cyl(0.99, 0.99, 0.12, "#90683d", 0, 0, 0, token, 48);
   const face = cyl(0.92, 0.92, 0.05, "#f3e2b8", 0, 0.085, 0, token, 48);
   face.material = [
@@ -265,6 +266,7 @@ export function decorateBoardTile(group, theme, { box, ball, cyl, mesh, top }) {
       [-0.9, 4.3],
     ]) {
       const field = box(2.05, 0.045, 1.3, "#a9853b", x, top + 0.04, z, group);
+      field.userData.walkObstacle = true;
       for (let i = 0; i < 7; i++)
         box(
           0.1,

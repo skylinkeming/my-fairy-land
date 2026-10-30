@@ -10,6 +10,7 @@ import {
   woodMaterial,
   decorateBoardTile,
 } from "./board-art.js";
+import {collectSceneryNavigation} from "./scenery-navigation.js";
 import { createResidentLife, ACTIVITY_LABELS, PARK } from "./resident-life.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { applyResidentShape, disposeShapeGeometry, RESIDENT_SHAPE_IDS } from "./resident-shape.js";
@@ -181,6 +182,7 @@ export function createWorld(
   scene.add(shadow);
   function tree(x, z, s, p, type = 0) {
     const g = new T.Group();
+    g.userData.walkObstacle = true;
     g.position.set(x, top, z);
     g.scale.setScalar(s);
     p.add(g);
@@ -226,6 +228,7 @@ export function createWorld(
         top,
         z + Math.cos(j * 3.88) * 0.55,
       );
+      g.userData.walkThrough = true;
       g.rotation.y = j * 2;
       p.add(g);
       cyl(0.015, 0.018, 0.27, "#849461", 0, 0.12, 0, g, 5);
@@ -246,6 +249,7 @@ export function createWorld(
   }
   function fence(x, z, n, p, rot = 0) {
     const g = new T.Group();
+    g.userData.walkObstacle = true;
     g.position.set(x, top, z);
     g.rotation.y = rot;
     p.add(g);
@@ -261,6 +265,7 @@ export function createWorld(
   }
   function house(parent, { x = 0, z = 0, w = 2.2, h = 1.7, d = 1.7 } = {}) {
     const group = new T.Group();
+    group.userData.walkObstacle = true;
     group.position.set(x, top, z);
     parent.add(group);
     const color = parent.userData.playerColor || "#a64331";
@@ -303,6 +308,7 @@ export function createWorld(
   }
   function bench(x, z, p, rot = 0, width = 1.1) {
     const g = new T.Group();
+    g.userData.walkObstacle = true;
     p.add(g);
     g.position.set(x, top, z);
     g.rotation.y = rot;
@@ -407,7 +413,7 @@ export function createWorld(
     scene.add(g);
     for (let i = 0; i < 8; i++)
       box(
-        0.75,
+        1.4,
         0.1,
         (len / 8) * 0.88,
         "#c9a878",
@@ -418,8 +424,8 @@ export function createWorld(
       );
     for (const s of [-1, 1]) {
       for (const z of [-len / 2, len / 2])
-        cyl(0.04, 0.05, 0.55, "#b89c73", s * 0.41, 0.23, z, g, 6);
-      box(0.055, 0.055, len, "#d8ba8b", s * 0.41, 0.46, 0, g);
+        cyl(0.04, 0.05, 0.55, "#b89c73", s * 0.75, 0.23, z, g, 6);
+      box(0.055, 0.055, len, "#d8ba8b", s * 0.75, 0.46, 0, g);
     }
   }
   [
@@ -468,7 +474,7 @@ export function createWorld(
   );
   sail.position.set(0.03, 0.4, -0.15);
   boat.add(sail);
-  const flowMarkers = [];
+  const flowMarkers = [], riverDefinitions = [], footbridgeDefinitions = [];
   function ribbon(curve, width, y, color, parent) {
     const points = curve.getPoints(70),
       vertices = [],
@@ -516,6 +522,7 @@ export function createWorld(
     ribbon(curve, width + 0.32, top + 0.035, "#e9dbb6", parent);
     const stream = ribbon(curve, width, top + 0.06, "#91c6bb", parent);
     stream.name = "winding-river";
+    riverDefinitions.push({curve, parent, width});
     for (let i = 0; i < 7; i++) {
       const glint = new T.Mesh(
         new T.CircleGeometry(0.11, 10),
@@ -539,21 +546,25 @@ export function createWorld(
       s * 0.82,
     ]);
     mound.name = "grassy-hill";
-    ball(1, "#a1a267", x - s * 0.5, top - 0.12, z + s * 0.2, parent, [
+    mound.userData.walkObstacle = true;
+    const slope = ball(1, "#a1a267", x - s * 0.5, top - 0.12, z + s * 0.2, parent, [
       s * 0.7,
       s * 0.4,
       s * 0.67,
     ]);
+    slope.userData.walkObstacle = true;
     tree(x - s * 0.8, z - 0.5, 0.9, parent, 1);
   }
   function footbridge(x, z, parent, rotation = 0) {
     const g = new T.Group();
+    g.userData.walkThrough = true;
+    footbridgeDefinitions.push({group: g, island: Object.entries({...groups, park: garden}).find(([, value]) => value === parent)?.[0]});
     g.position.set(x, top + 0.18, z);
     g.rotation.y = rotation;
     parent.add(g);
     for (let i = 0; i < 12; i++)
       box(
-        0.95,
+        1.3,
         0.1,
         0.15,
         "#c4a071",
@@ -564,8 +575,8 @@ export function createWorld(
       );
     for (const side of [-1, 1]) {
       for (const z of [-0.9, 0, 0.9])
-        cyl(0.04, 0.05, 0.68, "#ae8f68", side * 0.5, 0.33, z, g, 6);
-      box(0.055, 0.06, 1.9, "#d6b789", side * 0.5, 0.65, 0, g);
+        cyl(0.04, 0.05, 0.68, "#ae8f68", side * 0.72, 0.33, z, g, 6);
+      box(0.055, 0.06, 1.9, "#d6b789", side * 0.72, 0.65, 0, g);
     }
   }
   // The extra land is usable countryside rather than scaled-up buildings.
@@ -580,9 +591,18 @@ export function createWorld(
       ],
       group,
     );
-    hill(-3.6, -3.25, 1.65, group);
+    hill(-4.4, -2.9, 1.65, group);
     for (let i = 0; i < 7; i++) {
       const angle = 0.3 + i * 0.82;
+      const tx = Math.cos(angle) * 5, tz = Math.sin(angle) * 4.7;
+      const links = [['home','todo'],['home','note'],['home','friends'],['home','memories'],['note','friends'],['home','park']];
+      const origin = defs.find(node => node.id === id);
+      const nearLanding = links.filter(link => link.includes(id)).some(link => {
+        const neighbor = [...defs, PARK].find(node => node.id === link.find(value => value !== id));
+        const dx = neighbor.x - origin.x, dz = neighbor.z - origin.z, length = Math.hypot(dx, dz);
+        return tx * dx + tz * dz > 0 && Math.abs(tx * dz - tz * dx) / length < 1.65;
+      });
+      if (nearLanding) continue;
       tree(
         Math.cos(angle) * 5,
         Math.sin(angle) * 4.7,
@@ -595,7 +615,7 @@ export function createWorld(
     lamp(3.3, 2.6, group);
     flowers(-3.7, 2.7, group, index % 2 ? "#eab5a5" : "#f2e5b1", 6);
     flowers(3.2, -3, group, "#d1b4c9", 6);
-    fence(-2.5, 4.9, 5, group);
+    fence(id === 'note' ? -2.5 : 2.5, 4.5, 5, group);
   });
   river(
     [
@@ -645,8 +665,8 @@ export function createWorld(
     garden,
     1.4,
   );
-  hill(-2.6, -3.4, 2, garden);
-  hill(2, -3.8, 1.5, garden);
+  hill(-4.4, -3.5, 1.05, garden);
+  hill(4, -4, 1, garden);
   curvedPath(
     [
       [-4.9, 1.2],
@@ -681,15 +701,16 @@ export function createWorld(
     tree(x, z, 0.85, garden);
   for (const [x, z, r] of [
     [-2, 2.2, 0.1],
-    [-4.5, 1.4, 1.1],
+    [-5, 2.2, 1.1],
   ])
     bench(x, z, garden, r);
   // Shared coordinates keep the two seated residents aligned with a full-size bench.
   const chatBench = bench(PARK.chatBench.x, PARK.chatBench.z, garden,
     PARK.chatBench.heading, PARK.chatBench.width);
   chatBench.name = "resident-chat-bench";
+  chatBench.userData.obstacleId = "park-chat-bench";
   curvedPath([[PARK.stroll.x, PARK.stroll.far], [PARK.stroll.x, PARK.stroll.near]], garden, 1.9);
-  for (const [x, z] of [[-4.8, -3.3], [-3.1, -2.8], [-4.6, -1.5]]) tree(x, z, .75, garden);
+  for (const [x, z] of [[-4.8, -3.3], [-4.7, -3.7], [-4.6, -1.5]]) tree(x, z, .75, garden);
   flowers(-2, 3.9, garden, "#e7b6b3", 8);
   flowers(3.9, 1.9, garden, "#f7e8ad", 8);
   lamp(-1.3, 2.3, garden);
@@ -713,6 +734,7 @@ export function createWorld(
   cyl(0, 1.25, 0.85, "#ba8c70", -3.8, top + 2.05, 2.7, garden, 6);
   for (const [id, group] of Object.entries({ ...groups, park: garden })) {
     decorateBoardTile(group, BOARD_THEMES[id], { box, ball, cyl, mesh, top });
+    if (id === 'park') group.children.find(child => child.name === 'board-number-token').position.set(-.5, top + .12, -3.7);
   }
   container.dataset.artStyle = "catan-inspired";
   container.dataset.landAreaMultiplier = String(landScale ** 2);
@@ -734,7 +756,7 @@ export function createWorld(
   garden.add(swingFrame);
   swingFrame.name = "park-swings";
   for (const x of [0.65, 3.75])
-    for (const z of [2.85, 4.75])
+    for (const z of [3.2, 4.75])
       timberBetween(
         [x, top, z],
         [x, top + 2.9, 3.8],
@@ -751,6 +773,7 @@ export function createWorld(
   );
   const swingPivots = PARK.seats.map((seat) => {
     const pivot = new T.Group();
+    pivot.userData.walkThrough = true;
     pivot.position.set(seat.x, top + 2.8, seat.z);
     swingFrame.add(pivot);
     for (const x of [-0.29, 0.29])
@@ -767,6 +790,7 @@ export function createWorld(
     garden,
   );
   playBall.name = "residents-play-ball";
+  playBall.userData.walkThrough = true;
   const ballStripe = mesh(
     new T.TorusGeometry(0.221, 0.018, 5, 16),
     "#fff0d1",
@@ -777,7 +801,11 @@ export function createWorld(
   try {
     previousActivity = sessionStorage.getItem("little-island-last-activity");
   } catch {}
+  const navigationData = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
+  // The pavilion is reserved scenery, not a shortcut through its posts.
+  navigationData.obstacles.push({id: 'park-pavilion', island: 'park', minX: -4.95, maxX: -2.65, minZ: PARK.z + 1.55, maxZ: PARK.z + 3.85});
   const life = createResidentLife({
+    ...navigationData,
     nodes: [...defs, PARK],
     links: [
       ["home", "todo"],
@@ -789,6 +817,7 @@ export function createWorld(
     ],
     previous: previousActivity,
   });
+  container.dataset.walkableIslands = JSON.stringify(life.navigation.islandCounts);
   try {
     sessionStorage.setItem("little-island-last-activity", life.initialMode);
   } catch {}
@@ -1071,17 +1100,16 @@ export function createWorld(
       residents.forEach((r, i) => {
         const actor = life.actors[i];
         let bridgeLift = 0;
-        for (const bridge of [
-          { x: 0.2, z: 3.5 },
-          { x: 0.45, z: PARK.z + 1.1 },
-        ]) {
-          if (
-            actor.state === "walking" &&
-            Math.abs(actor.x - bridge.x) < 0.55 &&
-            Math.abs(actor.z - bridge.z) < 1
-          )
-            bridgeLift =
-              0.28 + Math.cos(((actor.z - bridge.z) * Math.PI) / 2) * 0.1;
+        for (const crossing of navigationData.crossings) {
+          const dx = crossing.b.x - crossing.a.x, dz = crossing.b.z - crossing.a.z;
+          const length = Math.hypot(dx, dz), ux = dx / length, uz = dz / length;
+          const x = actor.x - (crossing.a.x + crossing.b.x) / 2;
+          const z = actor.z - (crossing.a.z + crossing.b.z) / 2;
+          const along = x * ux + z * uz, lateral = x * uz - z * ux;
+          if (actor.state === 'walking' && Math.abs(along) < 1.15 && Math.abs(lateral) < .3) {
+            const ramp = Math.min(1, (1.15 - Math.abs(along)) / .2);
+            bridgeLift = (.23 + Math.max(0, Math.cos(along * Math.PI / 1.9)) * .15) * ramp;
+          }
         }
         r.g.position.set(actor.x, top + actor.yOffset + bridgeLift, actor.z);
         r.g.rotation.set(0, actor.heading, 0);
@@ -1121,15 +1149,18 @@ export function createWorld(
         // Positive rotation moves the seat toward positive Z.
         pivot.rotation.x = -(rider?.swingAngle || 0);
       });
-      const playing = life.actors.some((actor) => actor.state === "playing");
-      playBall.position.set(
-        PARK.play.x + (playing ? Math.cos(life.elapsed * 1.1) * 0.75 : 0),
-        top +
-          0.23 +
-          (playing ? Math.abs(Math.sin(life.elapsed * 3)) * 0.45 : 0),
-        PARK.play.z + (playing ? Math.sin(life.elapsed * 1.1) * 0.75 : 0),
-      );
-      playBall.rotation.z = playing ? life.elapsed * 2 : 0;
+      const players = life.actors.filter(actor => actor.state === 'playing');
+      const playing = players.length === 2;
+      playBall.visible = playing;
+      if (playing) {
+        const t = (Math.sin(life.elapsed * 1.7) + 1) / 2;
+        playBall.position.set(
+          players[0].x * (1 - t) + players[1].x * t - PARK.x,
+          top + .5 + Math.sin(t * Math.PI) * .65,
+          players[0].z * (1 - t) + players[1].z * t - PARK.z,
+        );
+        playBall.rotation.z = life.elapsed * 2;
+      }
       if (!reduced) {
         clouds.forEach(
           (c, i) => (c.g.position.x = c.x + Math.sin(t * 0.07 + i) * 0.4),
@@ -1285,6 +1316,7 @@ export function createWorld(
       frameDirty = true;
       todoBalloon.visible = count > 0;
     },
+    getNavigationData() {return {nodes: [...defs, PARK], links: [["home","todo"],["home","note"],["home","friends"],["home","memories"],["note","friends"],["home","park"]], ...navigationData};},
     getResidentActivities() {
       return life.descriptions();
     },

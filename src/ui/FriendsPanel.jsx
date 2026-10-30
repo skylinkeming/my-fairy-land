@@ -28,7 +28,7 @@ export function FriendsPanel({
           <h3>今天，也一起悠閒地生活</h3>
           <p>
             {residents.length}{" "}
-            位小夥伴各有自己的日常：兩兩散步、坐在公園椅子上聊天、獨自在樹林發呆，也會盪鞦韆和玩球。點選娃娃，立刻拉近看看牠；也可以打個招呼。
+            位小夥伴分散在不同小島自由散步，遇到樹木、房屋和佈景會繞路。偶爾兩兩結伴散步、聊天、盪鞦韆或玩球，也會獨自看風景。點選娃娃，立刻拉近看看牠；也可以打個招呼。
           </p>
         </div>
       </div>
@@ -37,6 +37,7 @@ export function FriendsPanel({
           <article
             className="resident-card"
             data-resident={index}
+            data-resident-island={activities[index]?.island}
             key={resident.id || index}
             onClick={(event) => {
               if (

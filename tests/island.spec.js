@@ -383,23 +383,21 @@ test("resident activities differ after refresh and the watch button brings them 
   );
 });
 
-test("mixed resident activities show walking companions, seated chat and forest solitude", async ({ page }) => {
-  await page.addInitScript(() => {
-    Math.random = () => .1;
-    sessionStorage.removeItem("little-island-last-activity");
-  });
+test("residents initially explore six different islands and can still be inspected", async ({page}) => {
+  await page.addInitScript(() => {Math.random = () => .1; sessionStorage.removeItem('little-island-last-activity');});
   await page.reload();
-  await expect(page.locator("#world")).toHaveAttribute("data-resident-activity", "wander");
+  await expect(page.locator('#world')).toHaveAttribute('data-render-mode', 'three');
+  const counts = JSON.parse(await page.locator('#world').getAttribute('data-walkable-islands'));
+  expect(Object.keys(counts)).toHaveLength(6);
+  expect(Object.values(counts).every(value => value > 0)).toBe(true);
   await page.locator('[data-open="friends"]').first().click();
-  const statuses = page.locator(".resident-status");
-  await expect(statuses.filter({hasText: "和朋友兩兩散步中"})).toHaveCount(2);
-  await expect(statuses.filter({hasText: "坐在公園椅子上聊天"})).toHaveCount(2);
-  await expect(statuses.filter({hasText: "獨自在樹林裡發呆"})).toHaveCount(1);
-  const chatting = page.locator(".resident-card").filter({hasText: "坐在公園椅子上聊天"}).first();
-  const index = await chatting.getAttribute("data-resident");
-  await chatting.locator("[data-watch-resident]").click();
-  await expect(page.locator("#world")).toHaveAttribute("data-focused-resident", index);
-  await expect(page.locator("#modal")).toBeHidden();
+  const cards = page.locator('.resident-card');
+  await expect(cards).toHaveCount(6);
+  const islands = await cards.evaluateAll(elements => elements.map(element => element.dataset.residentIsland));
+  expect(new Set(islands).size).toBe(6);
+  await expect(page.locator('.resident-status').filter({hasText: '散步'})).toHaveCount(6);
+  await cards.first().locator('[data-watch-resident]').click();
+  await expect(page.locator('#world')).toHaveAttribute('data-paused-resident', '0');
 });
 
 test("a selected doll greets you, stays paused during orbiting and resumes on goodbye", async ({ page }) => {
@@ -802,4 +800,53 @@ test('React data updates preserve the existing Three.js canvas and scene labels'
   await expect(page.locator('.map-label')).toHaveCount(4);
   await page.locator('.label-todo').click();
   await expect(page.locator('.todo-row').first()).toContainText('React 介面更新不重建 3D 場景');
+});
+
+
+test('real scenery navigation keeps residents out of props and connected across islands', async ({page}) => {
+  test.setTimeout(120000);
+  await page.route('**/navigation-check', route => route.fulfill({contentType: 'text/html', body: `
+    <div id="world" style="width:1000px;height:700px"><canvas></canvas><div id="world-labels"></div><button id="todo-reminder"></button></div>
+    <script type="module">
+      import {createWorld} from '/src/world.js';
+      import {icon} from '/src/ui/markup.js';
+      const runtime = createWorld(document.querySelector('#world'), () => {}, icon, () => {}, {isUiCovered: () => true});
+      window.navigationData = runtime.getNavigationData(); runtime.dispose();
+    </script>`}));
+  await page.goto('/navigation-check');
+  await page.waitForFunction(() => window.navigationData);
+  const results = await page.evaluate(async () => {
+    const {createResidentLife} = await import('/src/resident-life.js');
+    const data = window.navigationData, results = [];
+    for (const seed of [1, 7, 23]) {
+      let state = seed;
+      const random = () => {state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296;};
+      const life = createResidentLife({...data, random});
+      if (new Set(life.actors.map(actor => actor.node)).size !== 6) throw Error('Residents must spawn on six different islands');
+      let socialFrames = 0;
+      const travelled = life.actors.map(() => 0);
+      for (let frame = 0; frame < 3000; frame++) {
+        const before = life.actors.map(actor => ({x: actor.x, z: actor.z}));
+        life.update(.08);
+        for (const actor of life.actors) {
+          const ignore = actor.exitObstacle?.id || (actor.target?.ignore && (actor.state === 'chatting' || actor.routeIndex === actor.route.length - 1) ? actor.target.ignore : null);
+          if (!life.navigation.walkable(actor, ignore)) throw Error('Resident entered scenery at seed ' + seed + ', frame ' + frame);
+          const step = Math.hypot(actor.x - before[actor.id].x, actor.z - before[actor.id].z);
+          if (step > .15) throw Error('Resident teleported');
+          travelled[actor.id] += step;
+        }
+        for (let a = 0; a < life.actors.length; a++) for (let b = a + 1; b < life.actors.length; b++) {
+          if (Math.hypot(life.actors[a].x - life.actors[b].x, life.actors[a].z - life.actors[b].z) < 1.18 - 1e-6) throw Error('Residents overlap');
+        }
+        const social = life.actors.filter(actor => ['swinging', 'playing', 'chatting'].includes(actor.state) || (actor.activity === 'pairwalk' && actor.partner !== null && Math.hypot(actor.x - life.actors[actor.partner].x, actor.z - life.actors[actor.partner].z) < 3));
+        if (social.length > 2) throw Error('Whole household gathered instead of one pair');
+        if (social.length === 2) socialFrames++;
+      }
+      results.push({seed, socialFrames, travelled, islands: life.navigation.islandCounts, obstacleCount: data.obstacles.length});
+    }
+    return results;
+  });
+  expect(results.every(result => result.obstacleCount > 100 && Object.values(result.islands).every(count => count > 0))).toBe(true);
+  expect(results.every(result => result.travelled.every(distance => distance > 5))).toBe(true);
+  expect(results.some(result => result.socialFrames > 0)).toBe(true);
 });
