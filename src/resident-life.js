@@ -33,19 +33,19 @@ export function findIslandPath(from, to, links) {
 // Store attempted world directions, including blocked candidates, across encounters.
 export function chooseDeparture(actor, away, random, canDepart) {
   const history = actor.turnHistory ||= [];
-  const directions = Array.from({ length: 48 }, (_, sector) => ({
-    sector, heading: sector * Math.PI * 2 / 48,
+  const directions = Array.from({ length: 96 }, (_, sector) => ({
+    sector, heading: sector * Math.PI * 2 / 96,
   })).filter(({ heading }) => Math.cos(heading - away) >= Math.cos(.55));
   const preferred = away + (random() - .5) * 1.1;
   const angleDistance = heading => Math.abs(Math.atan2(Math.sin(heading - preferred), Math.cos(heading - preferred)));
   directions.sort((a, b) => angleDistance(a.heading) - angleDistance(b.heading));
   directions.unshift({heading: preferred,
-    sector: ((Math.round(preferred * 48 / (Math.PI * 2)) % 48) + 48) % 48});
+    sector: ((Math.round(preferred * 96 / (Math.PI * 2)) % 96) + 96) % 96});
   while (directions.length) {
     const candidate = directions.shift();
     if (history.includes(candidate.sector)) continue;
     history.push(candidate.sector);
-    if (history.length > 5) history.shift();
+    if (history.length > 10) history.shift();
     if (canDepart(candidate.heading)) return candidate.heading;
   }
   return null;

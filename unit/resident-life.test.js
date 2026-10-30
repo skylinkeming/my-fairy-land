@@ -252,18 +252,18 @@ test('occasional walking companions meet and keep moving without gathering every
   assert.ok(walkedTogether, 'retain the ability to occasionally go for a walk as a pair');
 });
 
-test("encounters remember the last five attempted world directions, including blocked ones", () => {
+test("encounters remember the last ten attempted world directions, including blocked ones", () => {
   const actor = {turnHistory: []}, attempts = [];
   for (let encounter = 0; encounter < 40; encounter++) {
     let checked = 0;
     const heading = chooseDeparture(actor, Math.PI / 2, () => .1, candidate => {
-      const sector = ((Math.round(candidate * 48 / (Math.PI * 2)) % 48) + 48) % 48;
-      assert.ok(!attempts.slice(-5).includes(sector), "never retry any of the last five attempts");
+      const sector = ((Math.round(candidate * 96 / (Math.PI * 2)) % 96) + 96) % 96;
+      assert.ok(!attempts.slice(-10).includes(sector), "never retry any of the last ten attempts");
       attempts.push(sector);
       return ++checked === 2; // Remember blocked candidates as well as successful departures.
     });
     assert.notEqual(heading, null);
-    assert.equal(actor.turnHistory.length, 5 > attempts.length ? attempts.length : 5);
-    assert.deepEqual(actor.turnHistory, attempts.slice(-5));
+    assert.equal(actor.turnHistory.length, Math.min(10, attempts.length));
+    assert.deepEqual(actor.turnHistory, attempts.slice(-10));
   }
 });
