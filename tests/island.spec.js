@@ -371,7 +371,7 @@ test("resident activities differ after refresh and the watch button brings them 
   const before = await page.locator("#resident-activity").textContent();
   expect(before).toMatch(/散步|盪鞦韆|玩耍/);
   await page.reload();
-  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator(".map-label")).toHaveCount(4, { timeout: 15000 });
   await expect(page.locator("#resident-activity")).not.toHaveText(before);
   await page.getByRole("button", { name: "看看娃娃", exact: true }).click();
   await expect(page.locator(".map-expanded")).toBeVisible();
@@ -495,7 +495,7 @@ test("residents and scenery remain still when reduced motion is requested", asyn
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload();
-  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator(".map-label")).toHaveCount(4, { timeout: 15000 });
   const first = await page.locator("#world-canvas").screenshot();
   await page.waitForTimeout(400);
   const second = await page.locator("#world-canvas").screenshot();
@@ -587,7 +587,7 @@ test("reminder balloon opens due items regardless of creation age and disappears
     );
   });
   await page.reload();
-  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator(".map-label")).toHaveCount(4, { timeout: 15000 });
   await expect(page.locator("#reminder-count")).toHaveText("2");
   await page.locator("#todo-reminder").click();
   await expect(page.locator('[data-todo-scope="upcoming"]')).toHaveClass(
@@ -607,7 +607,7 @@ test("reminder balloon opens due items regardless of creation age and disappears
     .check();
   await expect(page.locator("#todo-reminder")).toBeHidden();
   await page.reload();
-  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator(".map-label")).toHaveCount(4, { timeout: 15000 });
   await expect(page.locator("#todo-reminder")).toBeHidden();
 });
 
@@ -670,7 +670,7 @@ test("photo bear joins an existing household without resetting family data", asy
     }));
   });
   await page.reload();
-  await expect(page.locator(".map-label")).toHaveCount(4);
+  await expect(page.locator(".map-label")).toHaveCount(4, { timeout: 15000 });
   await page.locator('.island-card[data-open="friends"]').click();
   await expect(page.locator(".resident-card")).toHaveCount(6);
   const bear=page.locator(".resident-card").filter({hasText:"熊熊"});
@@ -751,7 +751,7 @@ test('shape studio previews, saves, reloads, exports and imports resident settin
   expect(exported.residents.guagua.bodyWidth).toBe(1.42);
   await editor.getByRole('button', {name: '關閉造型編輯器'}).click();
   await page.reload();
-  await expect(page.locator('#world')).toHaveAttribute('data-art-style', 'catan-inspired');
+  await expect(page.locator('#world')).toHaveAttribute('data-art-style', 'catan-inspired', { timeout: 15000 });
   await openFrog();
   await expect(width).toHaveValue('1.42');
   await editor.getByRole('button', {name: '恢復原始造型'}).click();

@@ -1,3 +1,6 @@
+import {FamilyPanel} from './ui/FamilyPanel.jsx';
+import {useFamilyWorkspace} from './family/useFamilyWorkspace.js';
+import {familyScope} from './family/api.js';
 import React, {
   lazy,
   Suspense,
@@ -7,7 +10,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { SHAPE_STORAGE_KEY, parseShapeSettings } from "./resident-shape.js";
+import { parseShapeSettings } from "./resident-shape.js";
 import { loadHousehold, islands } from "./household.js";
 import { getUpcomingTodos } from "./todo-reminders.js";
 import { Icon } from "./ui/Icon.jsx";
@@ -157,7 +160,18 @@ function IslandModal({ panel, photoOpen, onClose, children }) {
   );
 }
 export default function App() {
-  const [household, setHousehold] = useState(loadHousehold),
+  const workspace=useFamilyWorkspace();
+  const [familyOpen,setFamilyOpen]=useState(false);
+  const openFamily=useCallback(()=>setFamilyOpen(true),[]),closeFamily=useCallback(()=>setFamilyOpen(false),[]);
+  const scope=familyScope(workspace.user?.id,workspace.activeFamily?.id,workspace.ready);
+  useEffect(()=>{if(workspace.ready && workspace.user && !workspace.activeFamily || workspace.recovery)setFamilyOpen(true);},[workspace.ready,workspace.user?.id,workspace.activeFamily?.id,workspace.recovery]);
+  return <>
+    {workspace.ready?<IslandApp key={scope.key} workspace={workspace} scope={scope} familyOpen={familyOpen} onFamilyOpen={openFamily}/>:<main className="family-startup"><span aria-hidden="true">⌂</span><p role="status">正在開啟你的小島…</p><button id="family-account" className="secondary-button" onClick={openFamily}>帳號與家庭</button></main>}
+    {familyOpen&&<FamilyPanel workspace={workspace} onClose={closeFamily}/>}
+  </>;
+}
+function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
+  const [household, setHousehold] = useState(()=>loadHousehold(scope.storageKey)),
     [panel, setPanel] = useState(null),
     [photo, setPhoto] = useState(null);
   const [expanded, setExpanded] = useState(false),
@@ -170,7 +184,7 @@ export default function App() {
   const [editor, setEditor] = useState(null),
     [shapes, setShapes] = useState(() => {
       try {
-        const value = localStorage.getItem(SHAPE_STORAGE_KEY);
+        const value = localStorage.getItem(scope.shapesKey);
         return value ? parseShapeSettings(value) : {};
       } catch {
         return {};
@@ -187,8 +201,9 @@ export default function App() {
   );
   const commit = useCallback(
     (next) => {
+      if(!scope.editable){onFamilyOpen();notify("先建立或加入家庭，再記下你們的日常。");return false;}
       try {
-        localStorage.setItem("little-island-v1", JSON.stringify(next));
+        localStorage.setItem(scope.storageKey, JSON.stringify(next));
         setHousehold(next);
         return true;
       } catch {
@@ -196,7 +211,7 @@ export default function App() {
         return false;
       }
     },
-    [notify],
+    [notify,scope.storageKey,scope.editable,onFamilyOpen],
   );
   useEffect(() => {worldRef.current?.setInteriorsVisible(interiors);}, [interiors,ready]);
   useEffect(() => {
@@ -237,11 +252,12 @@ export default function App() {
     });
   }, []);
   const openPanel = useCallback((id, options = {}) => {
+    if(id!=="friends" && !scope.editable){onFamilyOpen();return;}
     if (!islands.some((island) => island.id === id)) return;
     returnFocus.current = document.activeElement;
     setPanel({ id, ...options, instance: ++panelId.current });
     worldRef.current?.focusIsland(id);
-  }, []);
+  }, [scope.editable,onFamilyOpen]);
   const expandMap = useCallback((value) => {
     setExpanded(value);
     if (!value) {
@@ -331,6 +347,9 @@ export default function App() {
             回憶收藏
           </button>
         </nav>
+        <button id="family-account" className="family-account-button" onClick={()=>{closePanel(false);worldRef.current?.endResidentVisit();onFamilyOpen();}}>
+          <span aria-hidden="true">⌂</span><span>{workspace.activeFamily?.name || (workspace.user?'我的家庭':'登入／家庭')}</span>
+        </button>
         <button
           className="resident-pill"
           data-open="friends"
@@ -342,6 +361,7 @@ export default function App() {
         </button>
       </header>
       <main>
+        {workspace.user&&<div className="family-context"><strong>{workspace.activeFamily?.name||"尚未加入家庭"}</strong><span>{workspace.activeFamily?"家庭名單已同步，日常內容尚未共享。":"建立或加入家庭，開始一起生活。"}</span><button onClick={onFamilyOpen}>家庭空間</button></div>}
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-copy">
             <div className="eyebrow">
@@ -422,7 +442,7 @@ export default function App() {
               onReady={onReady}
               onEdit={setEditor}
               shapes={shapes}
-              suspended={Boolean(panel) || editor !== null}
+              suspended={Boolean(panel) || editor !== null || familyOpen}
             />
             <div className="map-caption">
               <span className="live-dot" /> OUR LITTLE WORLD{" "}
@@ -629,6 +649,7 @@ export default function App() {
             initialIndex={editor}
             residents={household.residents}
             settings={shapes}
+            storageKey={scope.shapesKey}
             onChange={setShapes}
             onClose={() => setEditor(null)}
             worldRef={worldRef}

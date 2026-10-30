@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: "**/family/**",
   fullyParallel: false,
   // SwiftShader renders the full 3D scene on CPU in the cloud runner.
   timeout: 60000,

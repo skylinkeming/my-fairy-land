@@ -11,6 +11,7 @@ import {
 
 export default function ResidentEditor({
   initialIndex,
+  storageKey=SHAPE_STORAGE_KEY,
   residents,
   settings,
   onChange,
@@ -113,7 +114,7 @@ export default function ResidentEditor({
     setStatus("拖曳娃娃旋轉，滾輪或雙指縮放；調好後按「儲存並套用」。");
   }
   function persist(next) {
-    localStorage.setItem(SHAPE_STORAGE_KEY, serializeShapeSettings(next));
+    localStorage.setItem(storageKey, serializeShapeSettings(next));
     onChange(next);
   }
   function save() {

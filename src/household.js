@@ -68,15 +68,18 @@ const initial = {
     { ...PHOTO_DINO },
   ],
 };
-export function loadHousehold() {
+export function loadHousehold(storageKey="little-island-v1") {
+  const fallback=structuredClone(initial);
+  if(storageKey!=="little-island-v1") {fallback.todos=[];fallback.notes=[];fallback.memories=[];}
   let state;
   try {
     state =
-      JSON.parse(localStorage.getItem("little-island-v1")) ||
-      structuredClone(initial);
+      JSON.parse(localStorage.getItem(storageKey)) || fallback;
   } catch {
-    state = structuredClone(initial);
+    state = fallback;
   }
+  if(!state || typeof state!=="object" || Array.isArray(state)) state=fallback;
+  for(const key of ["todos","notes","memories"]) if(!Array.isArray(state[key])) state[key]=structuredClone(fallback[key]);
   // Add the new resident to existing households without resetting their journals.
   if (!Array.isArray(state.residents) || !state.residents.length)
     state.residents = structuredClone(initial.residents);

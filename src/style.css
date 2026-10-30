@@ -3509,3 +3509,38 @@ body.resident-editor-open { overflow: hidden; }
 }
 .resident-speech[hidden] {display:none;}
 #world[data-resident-bubble-visible="false"] .resident-speech {visibility:hidden;}
+
+/* Account and family UI remains in React, separate from the 3D scene. */
+body.family-open {overflow:hidden;}
+.family-account-button {display:flex;align-items:center;gap:7px;padding:9px 13px;border:1px solid #cdbb98;border-radius:22px;background:#fcf7e9;color:#795f40;cursor:pointer;max-width:185px;min-width:0;}
+.family-account-button span:last-child {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.family-context {max-width:1080px;margin:18px auto 0;padding:10px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:#f5eedc;border:1px solid #ded0ae;border-radius:12px;color:#806c4b;font-size:13px;}
+.family-context button {margin-left:auto;border:0;background:none;color:#735c3d;text-decoration:underline;cursor:pointer;}
+.family-startup {min-height:70vh;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#8b7452;gap:16px;}
+.family-startup>span {font-size:48px;}
+.family-overlay {position:fixed;inset:0;z-index:1200;background:#3b342954;backdrop-filter:blur(5px);padding:30px 18px;display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;}
+.family-panel {width:min(600px,100%);padding:28px;background:#fffaf0;border:1px solid #d9c5a1;border-radius:22px;box-shadow:0 18px 65px #322a2533;outline:none;color:#695840;}
+.family-panel-header {display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:23px;}
+.family-panel h2 {font-size:25px;margin:5px 0;}.family-panel h3 {font-size:18px;margin:0 0 12px;}.family-panel h4 {margin:18px 0 10px;font-size:15px;}
+.family-panel p {line-height:1.75;}.family-intro {font-size:14px;color:#887758;}.family-form {display:grid;gap:16px;margin:18px 0;}
+.family-form label,.family-selector,.family-invitation label {display:grid;gap:7px;font-size:14px;font-weight:600;}
+.family-form input,.family-form textarea,.family-selector select,.family-invitation textarea {width:100%;min-width:0;border:1px solid #d8c6a4;border-radius:10px;background:#fffdf7;padding:11px 12px;color:#65533c;font:inherit;}
+.family-form small,.family-invitation small {font-size:12px;font-weight:400;color:#8a785b;line-height:1.6;}
+.family-tabs {display:flex;gap:6px;background:#f0e6d2;border-radius:12px;padding:5px;margin:15px 0;}
+.family-tabs button {flex:1;border:0;border-radius:9px;background:transparent;padding:10px 12px;cursor:pointer;color:#8b7758;font:inherit;}
+.family-tabs button[aria-pressed="true"] {background:#fffaf0;color:#725a37;box-shadow:0 2px 6px #90734a16;}
+.family-text-button {border:0;background:none;text-decoration:underline;text-underline-offset:3px;color:#8b714d;padding:7px 2px;cursor:pointer;font:inherit;font-size:13px;}
+.family-account-summary {display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;background:#f4eedf;border-radius:13px;margin-bottom:20px;}
+.family-account-summary>div {min-width:0;}.family-account-summary small {display:block;color:#9c896a;overflow-wrap:anywhere;margin-top:4px;}
+.family-section {border-top:1px solid #e6dac3;padding-top:22px;margin-top:22px;}.family-section-title {display:flex;align-items:center;justify-content:space-between;gap:10px;}.family-section-title h3 {margin:0;overflow-wrap:anywhere;}
+.family-role {font-size:11px;white-space:nowrap;color:#7b8c6b;background:#eaf0df;border-radius:14px;padding:5px 9px;}
+.family-scope-note {font-size:12px;background:#f6f0e3;border-radius:9px;padding:10px 12px;color:#917c59;}
+.family-members,.family-invites {list-style:none;padding:0;margin:0;}.family-members li {display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #f0e6d3;}
+.family-members li>div {flex:1;min-width:0;overflow-wrap:anywhere;}.family-members small {display:block;margin-top:3px;color:#a08e72;font-size:12px;}.family-avatar {display:grid;place-items:center;flex-shrink:0;width:38px;height:38px;border-radius:50%;background:#e0e8d0;color:#7c8d65;}
+.family-invitation {display:grid;gap:10px;margin:16px 0;background:#f1ecd9;border-radius:12px;padding:14px;}.family-invitation textarea {font-family:monospace;font-size:13px;overflow-wrap:anywhere;}
+.family-invites {margin-top:15px;font-size:12px;color:#9a8768;}.family-invites li {display:flex;justify-content:space-between;align-items:center;gap:10px;}.family-extra-actions {display:flex;flex-wrap:wrap;gap:9px;margin:24px 0 12px;}
+.family-confirm {padding:16px;background:#f7ebd9;border:1px solid #dcc7a4;border-radius:13px;margin-top:18px;}.family-confirm button+button {margin-left:10px;}
+.family-message {padding:12px;border-radius:10px;background:#edf1e1;color:#6b8059;line-height:1.7;}.family-message.error {background:#f6e8df;color:#9d6554;}
+.family-welcome {text-align:center;padding:15px 5px 25px;}.family-welcome>span {font-size:48px;display:block;color:#9baf85;margin-bottom:20px;}.family-welcome p {color:#9a8668;font-size:14px;}
+.family-panel button:disabled {opacity:.6;cursor:wait;}.family-panel :focus-visible,.family-account-button:focus-visible {outline:3px solid #b99b6b;outline-offset:3px;}
+@media(max-width:760px){.family-account-button {max-width:105px;padding:7px 9px;font-size:11px;margin-left:auto;}.site-header {gap:8px;}.family-overlay {padding:12px;}.family-panel {padding:20px 17px;border-radius:17px;}.family-panel h2 {font-size:21px;}.family-context {margin:10px 12px 0;font-size:12px;}.family-extra-actions .secondary-button {flex:1;}}
