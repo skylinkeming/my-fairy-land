@@ -11,7 +11,7 @@ function segmentDistance(point, a, b) {
 
 // A reproducible landscape plan with irregular clearings, clustered planting,
 // and broad, unobstructed routes from the center to each bridge landing.
-export function createNaturalLayout({id, node, nodes, obstacles = []}) {
+export function createNaturalLayout({id, node, nodes, obstacles = [], crossings = []}) {
   const random = sceneryRandom(id);
   const exits = LINKS.filter(link => link.includes(id)).map(link => nodes.find(other => other.id === link.find(value => value !== id))).filter(Boolean);
   const nearExit = (x,z,margin=1.9) => exits.some(other => {
@@ -21,6 +21,7 @@ export function createNaturalLayout({id, node, nodes, obstacles = []}) {
   const free = (point, clearance=1.5) => {
     if (Math.hypot(point.x,point.z)>10.65 || nearExit(point.x,point.z)) return false;
     const world = {x:node.x+point.x,z:node.z+point.z};
+    if (crossings.some(crossing => segmentDistance(world,crossing.a,crossing.b) < clearance+.65)) return false;
     return obstacles.every(obstacle => {
       if(obstacle.kind === 'river') return !obstacle.points.some((p,i) => i && segmentDistance(world,obstacle.points[i-1],p)<obstacle.radius+clearance);
       if(obstacle.radius !== undefined) return Math.hypot(world.x-obstacle.x,world.z-obstacle.z)>obstacle.radius+clearance;
@@ -42,12 +43,13 @@ export function createNaturalLayout({id, node, nodes, obstacles = []}) {
     if(candidate) pockets.push({...candidate,heading:(random()-.5)*1.5});
   }
   const groves = [];
-  const treeCount = id==='todo'?18:id==='note'?7:12;
-  for(let attempt=0; attempt<900 && groves.length<treeCount; attempt++) {
-    const anchor=anchors[attempt%3],angle=random()*Math.PI*2,radius=Math.sqrt(random())*3.8;
-    const point={x:anchor.x+Math.cos(angle)*radius,z:anchor.z+Math.sin(angle)*radius};
-    if(!free(point,1.05) || pockets.some(other=>Math.hypot(point.x-other.x,point.z-other.z)<2.25) || groves.some(other=>Math.hypot(point.x-other.x,point.z-other.z)<1.55)) continue;
-    groves.push({...point,scale:.55+random()*.4,type:id==='home'?2:random()<.5?1:0});
+  const treeCount = id==='todo'?72:id==='note'?40:id==='park'?55:50;
+  for(let attempt=0; attempt<6000 && groves.length<treeCount; attempt++) {
+    const anchor=anchors[attempt%anchors.length],angle=random()*Math.PI*2,radius=Math.sqrt(random())*4;
+    const point=attempt%3===0 ? {x:Math.cos(angle)*Math.sqrt(random())*11.4,z:Math.sin(angle)*Math.sqrt(random())*11.4}
+      : {x:anchor.x+Math.cos(angle)*radius,z:anchor.z+Math.sin(angle)*radius};
+    if(!free(point,.65) || pockets.some(other=>Math.hypot(point.x-other.x,point.z-other.z)<1.8) || groves.some(other=>Math.hypot(point.x-other.x,point.z-other.z)<1.35)) continue;
+    groves.push({...point,scale:.78+random()*.48,type:id==='home'?2:random()<.5?1:0});
   }
   return {pockets,groves,anchors,nearExit};
 }

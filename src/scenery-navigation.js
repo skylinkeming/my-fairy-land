@@ -5,6 +5,13 @@ export function collectSceneryNavigation(groups, rivers, footbridges, top) {
   let serial = 0;
   function visit(object, island) {
     if (object.userData.walkThrough) return;
+    if (object.userData.walkObstacleRadius) {
+      const position = object.getWorldPosition(new T.Vector3());
+      const scale = object.getWorldScale(new T.Vector3());
+      obstacles.push({id: object.userData.obstacleId || `${island}-scenery-${serial++}`, island,
+        x: position.x, z: position.z, radius: object.userData.walkObstacleRadius * Math.max(scale.x, scale.z)});
+      return;
+    }
     if (object.userData.walkObstacle || object.isMesh) {
       const bounds = new T.Box3().setFromObject(object),
         height = bounds.max.y - bounds.min.y;
@@ -37,6 +44,7 @@ export function collectSceneryNavigation(groups, rivers, footbridges, top) {
     obstacles.push({
       id: `river-${serial++}`,
       kind: "river",
+      island: Object.entries(groups).find(([, group]) => group === parent)?.[0],
       radius: width / 2,
       points,
     });

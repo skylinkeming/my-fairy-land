@@ -1,4 +1,4 @@
-import { addExpandedScenery, batchExpandedScenery } from "./expanded-scenery.js";
+import { addExpandedScenery, batchExpandedScenery, addConnectedSceneryPaths } from "./expanded-scenery.js";
 import { seatedRootHeight } from "./resident-pose.js";
 import * as T from "three";
 import { createDinosaur } from "./dinosaur.js";
@@ -187,6 +187,7 @@ export function createWorld(
   function tree(x, z, s, p, type = 0) {
     const g = new T.Group();
     g.userData.walkObstacle = true;
+    g.userData.walkObstacleRadius = .22;
     g.position.set(x, top, z);
     g.scale.setScalar(s);
     p.add(g);
@@ -488,7 +489,7 @@ export function createWorld(
       for (const side of [-1, 1])
         vertices.push(
           point.x + (normal.x * width * side) / 2,
-          y,
+          y + point.y,
           point.z + (normal.z * width * side) / 2,
         );
       if (i < 70) {
@@ -520,7 +521,7 @@ export function createWorld(
   }
   function river(points, parent, width = 1) {
     const curve = new T.CatmullRomCurve3(
-      points.map(([x, z]) => new T.Vector3(x, 0, z)),
+      points.map(([x, z, y = 0]) => new T.Vector3(x, y, z)),
     );
     ribbon(curve, width + 0.32, top + 0.035, "#e9dbb6", parent);
     const stream = ribbon(curve, width, top + 0.06, "#91c6bb", parent);
@@ -586,6 +587,10 @@ export function createWorld(
 
   river(
     [
+      [-13.6, 11.4, -1.48],
+      [-11.8, 9.6, -.22],
+      [-10.8, 7.8],
+      [-9.3, 4.4],
       [-6, 1.4],
       [-4.2, 2],
       [-2.4, 3.2],
@@ -593,11 +598,16 @@ export function createWorld(
       [2.6, 3],
       [4.5, 2.2],
       [6, 1.3],
+      [9, 4.5],
+      [10.8, 7.8],
+      [11.8, 9.6, -.22],
+      [13.6, 11.4, -1.48],
     ],
     home,
     1.05,
   );
   footbridge(0.2, 3.5, home, 0.2);
+  footbridge(-8.5, 3.55, home, .72);
   curvedPath(
     [
       [0, 1.5],
@@ -621,6 +631,10 @@ export function createWorld(
   // Riverside central park: an open lawn, twin hills, promenade and picnic pavilion.
   river(
     [
+      [-14.5, -4.4, -1.48],
+      [-12.6, -3.9, -.22],
+      [-11.9, -3.7],
+      [-9.2, -2.4],
       [-6.1, -1.1],
       [-4, -0.8],
       [-2, 0.3],
@@ -628,6 +642,10 @@ export function createWorld(
       [2.1, 0.8],
       [4, -0.4],
       [6.1, -1.2],
+      [9.2, -2.5],
+      [11.9, -3.5],
+      [12.6, -3.7, -.22],
+      [14.5, -4.1, -1.48],
     ],
     garden,
     1.4,
@@ -703,7 +721,7 @@ export function createWorld(
     decorateBoardTile(group, BOARD_THEMES[id], { box, ball, cyl, mesh, top });
   }
   const originalScenery = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
-  const expandedScenery = addExpandedScenery({obstacles: originalScenery.obstacles,groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
+  const expandedScenery = addExpandedScenery({obstacles: originalScenery.obstacles, crossings: originalScenery.crossings,groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
   container.dataset.expandedScenery = JSON.stringify(expandedScenery);
   container.dataset.artStyle = "catan-inspired";
   container.dataset.landAreaMultiplier = String(landScale ** 2);
@@ -771,7 +789,6 @@ export function createWorld(
     previousActivity = sessionStorage.getItem("little-island-last-activity");
   } catch {}
   const navigationData = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
-  batchExpandedScenery(scene);
   // The pavilion is reserved scenery, not a shortcut through its posts.
   navigationData.obstacles.push({id: 'park-pavilion', island: 'park', minX: -4.95, maxX: -2.65, minZ: PARK.z + 1.55, maxZ: PARK.z + 3.85});
   const life = createResidentLife({
@@ -787,6 +804,8 @@ export function createWorld(
     ],
     previous: previousActivity,
   });
+  addConnectedSceneryPaths({groups: {...groups, park: garden}, nodes: [...defs, PARK], navigation: life.navigation, scenery: expandedScenery, curvedPath});
+  batchExpandedScenery(scene);
   container.dataset.walkableIslands = JSON.stringify(life.navigation.islandCounts);
   try {
     sessionStorage.setItem("little-island-last-activity", life.initialMode);
@@ -1149,7 +1168,7 @@ export function createWorld(
       const point = marker.curve.getPoint(
         ((reduced ? 0 : t) * 0.025 + marker.offset) % 1,
       );
-      marker.glint.position.set(point.x, top + 0.08, point.z);
+      marker.glint.position.set(point.x, top + 0.08 + point.y, point.z);
     }
     if (todoBalloon.visible) {
       const balloonHeight = width < 600 ? 12.8 : 10.8;

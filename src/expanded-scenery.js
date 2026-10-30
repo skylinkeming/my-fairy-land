@@ -11,7 +11,7 @@ const THEMES = {
   park: ['pond', 'picnic', 'mushrooms', 'playground', 'well', 'greenhouse', 'fountain', 'party'],
 };
 
-export function addExpandedScenery({groups, nodes, obstacles = [], scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
+export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [], scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
   const summary = [];
   function pocket(kind, x, z, parent, angle) {
     const group = new T.Group();
@@ -159,42 +159,38 @@ export function addExpandedScenery({groups, nodes, obstacles = [], scene, top, b
     parent.name = 'expanded-island-dressing';
     island.add(parent);
     const node=nodes.find(node=>node.id===id), kinds=THEMES[id];
-    const layout=createNaturalLayout({id,node,nodes,obstacles});
+    const layout=createNaturalLayout({id,node,nodes,obstacles,crossings});
     const random=sceneryRandom(id+'-meadow');
     const placed=[];
     layout.pockets.forEach((point,index)=>{
       const kind=kinds[index%kinds.length];
       pocket(kind,point.x,point.z,parent,point.heading);
       placed.push(kind);
-      // Short, gently curved approaches avoid a repeated ring or spoke pattern.
-      const length=Math.hypot(point.x,point.z),dx=point.x/length,dz=point.z/length;
-      curvedPath([[point.x-dx*2.7+dz*.5,point.z-dz*2.7-dx*.5],
-        [point.x-dx*1.9,point.z-dz*1.9],
-        [point.x-dx*1.2,point.z-dz*1.2]],parent,.5);
+
     });
     layout.groves.forEach(point=>tree(point.x,point.z,point.scale,parent,point.type));
     // Irregular meadow patches soften the spaces between buildings and groves.
-    const patches=layout.anchors.slice(0,3).map(anchor=>({x:anchor.x*.86,z:anchor.z*.86}));
+    const patches=layout.anchors.slice(0,6).map(anchor=>({x:anchor.x*.86,z:anchor.z*.86}));
     patches.forEach((patch,index)=>{
       const shape=new T.Shape();
       for(let i=0;i<=12;i++) {
-        const angle=i*Math.PI/6,radius=1.7+random()*.6;
+        const angle=i*Math.PI/6,radius=2.2+random()*.9;
         const x=Math.cos(angle)*radius,z=Math.sin(angle)*radius*.75;
         if(i===0) shape.moveTo(x,z); else shape.lineTo(x,z);
       }
       const meadow=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshStandardMaterial({
-        color:id==='note'?'#c1b76e':['#98a777','#a6af7e','#8fa274'][index],roughness:1,side:T.DoubleSide,
+        color:id==='note'?'#c1b76e':['#98a777','#a6af7e','#8fa274'][index%3],roughness:1,side:T.DoubleSide,
         transparent:true,opacity:.38,depthWrite:false,
       }));
       meadow.rotation.x=-Math.PI/2;meadow.position.set(patch.x,top+.008,patch.z);
       meadow.userData.walkThrough=true;parent.add(meadow);
     });
     const dummy=new T.Object3D();
-    for(const [color,height] of [['#91a16f',.12],['#ead8ad',.1]]) {
-      const dots=new T.InstancedMesh(new T.ConeGeometry(.075,height,4),new T.MeshStandardMaterial({color,roughness:1}),160);
+    for(const [color,height] of [['#829863',.23],['#e5cba8',.19],['#c9abc1',.17]]) {
+      const dots=new T.InstancedMesh(new T.ConeGeometry(.13,height,5),new T.MeshStandardMaterial({color,roughness:1}),360);
       dots.userData.walkThrough=true;dots.name='meadow-flowers';
-      for(let i=0;i<160;i++) {
-        const patch=patches[i%patches.length],angle=random()*Math.PI*2,radius=Math.sqrt(random())*2.7;
+      for(let i=0;i<360;i++) {
+        const patch=patches[i%patches.length],angle=random()*Math.PI*2,radius=Math.sqrt(random())*3.2;
         dummy.position.set(patch.x+Math.cos(angle)*radius,top+.08,patch.z+Math.sin(angle)*radius);
         dummy.rotation.y=angle;dummy.updateMatrix();dots.setMatrixAt(i,dummy.matrix);
       }
@@ -231,7 +227,7 @@ export function addExpandedScenery({groups, nodes, obstacles = [], scene, top, b
 export function batchExpandedScenery(scene) {
   const roots = [];
   scene.traverse(object => {
-    if (['expanded-island-dressing', 'outer-plains-and-hills'].includes(object.name)) roots.push(object);
+    if (['expanded-island-dressing', 'outer-plains-and-hills', 'expanded-island-paths'].includes(object.name)) roots.push(object);
   });
   for (const root of roots) {
     root.updateWorldMatrix(true, true);
@@ -255,5 +251,35 @@ export function batchExpandedScenery(scene) {
       root.add(mesh);
     }
     if (instances.length) root.add(...instances);
+  }
+}
+
+
+export function addConnectedSceneryPaths({groups,nodes,navigation,scenery,curvedPath}) {
+  const links=[['home','todo'],['home','note'],['home','friends'],['home','memories'],['note','friends'],['home','park']];
+  for(const island of scenery.islands) {
+    const node=nodes.find(node=>node.id===island.id), parent=new T.Group();
+    parent.name='expanded-island-paths';parent.userData.walkThrough=true;
+    groups[island.id].add(parent);
+    const start=navigation.nearest({x:node.x,z:node.z+1.6},node.id);
+    if(!start) continue;
+    const destinations=island.positions.map(point=>({
+      x:node.x+point.x-Math.sin(point.heading)*1.8,
+      z:node.z+point.z+Math.cos(point.heading)*1.8,width:.65,
+    }));
+    for(const link of links.filter(link=>link.includes(node.id))) {
+      const other=nodes.find(other=>other.id===link.find(id=>id!==node.id));
+      const distance=Math.hypot(other.x-node.x,other.z-node.z);
+      destinations.push({x:node.x+(other.x-node.x)/distance*11.15,z:node.z+(other.z-node.z)/distance*11.15,width:1});
+    }
+    island.paths=0;
+    for(const destination of destinations) {
+      const end=navigation.nearest(destination,node.id);
+      const route=end && navigation.route(start,end);
+      if(!route || route.length<2) continue;
+      const points=route.map(point=>[point.x-node.x,point.z-node.z]);
+      curvedPath(points,parent,destination.width);
+      island.paths++;
+    }
   }
 }
