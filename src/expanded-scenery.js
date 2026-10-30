@@ -164,8 +164,6 @@ export function addExpandedScenery({groups, nodes, scene, top, box, ball, cyl, m
       const dx=other.x-node.x,dz=other.z-node.z,length=Math.hypot(dx,dz);
       return x*dx+z*dz>0 && Math.abs(x*dz-z*dx)/length<margin;
     });
-    const loop=Array.from({length:25},(_,i)=>[Math.cos(i*Math.PI/12)*7.3,Math.sin(i*Math.PI/12)*7.3]);
-    curvedPath(loop,parent,1.1);
     const placed=[];
     for(let i=0;i<18 && placed.length<10;i++) {
       const angle=i*Math.PI/9+.16;
