@@ -166,6 +166,9 @@ test('natural scenery fills different depths while preserving bridge corridors a
     crossings: [{a:{x:0,z:2},b:{x:0,z:5}}]};
   const plan = createNaturalLayout(options);
   assert.equal(plan.pockets.length, 8);
+  assert.ok(plan.landmark, 'reserve a distinct main scene');
+  assert.ok(plan.groves.length<=24,'woodland stays local instead of filling the whole island');
+  assert.ok(plan.groves.every(tree=>Math.hypot(tree.x-plan.landmark.x,tree.z-plan.landmark.z)>=plan.landmark.radius+1.1),'trees do not cover the main scene');
   assert.deepEqual(plan.pockets, createNaturalLayout(options).pockets, 'landscape does not reshuffle on every refresh');
   const radii = plan.pockets.map(point => Math.hypot(point.x,point.z));
   assert.ok(Math.max(...radii)-Math.min(...radii)>2, 'avoid placing every prop on one circular perimeter');
@@ -192,4 +195,42 @@ test('dense woodland blocks tree trunks while leaving space below the crowns wal
   const navigation = createResidentNavigation({nodes, links: [], ...data});
   assert.equal(navigation.walkable({x: 2, z: 1}), false);
   assert.equal(navigation.walkable({x: 3.1, z: 1}), true, 'tree canopy does not become an invisible wall');
+});
+
+test('static scenery batching preserves animated landmarks and their world-space pivots', async () => {
+  const {batchExpandedScenery} = await import('../src/expanded-scenery.js');
+  const scene=new T.Scene(),island=new T.Group(),dressing=new T.Group(),rotor=new T.Group();
+  island.position.set(15,0,-7);island.rotation.y=.3;scene.add(island);
+  dressing.name='expanded-island-dressing';island.add(dressing);
+  const landmark=new T.Group();landmark.position.set(5,.67,3);dressing.add(landmark);
+  rotor.position.set(0,2.65,.78);rotor.userData.sceneryAnimated=true;landmark.add(rotor);
+  const blade=new T.Mesh(new T.BoxGeometry(.1,2,.1),new T.MeshBasicMaterial());
+  blade.position.y=1;rotor.add(blade);
+  const before=rotor.getWorldPosition(new T.Vector3());
+  batchExpandedScenery(scene);
+  assert.equal(rotor.parent,dressing);
+  assert.ok(before.distanceTo(rotor.getWorldPosition(new T.Vector3()))<1e-6);
+  assert.equal(rotor.children[0],blade,'animated geometry stays separate from static batches');
+  rotor.rotation.z=.5;
+  assert.ok(before.distanceTo(rotor.getWorldPosition(new T.Vector3()))<1e-6,'rotation does not move the windmill pivot');
+});
+
+test('the park lake has a real walkable flower bridge instead of a water shortcut', async () => {
+  const {buildIslandLandmark} = await import('../src/island-landmarks.js');
+  const island=new T.Group(),rivers=[],footbridges=[];
+  const material=new T.MeshBasicMaterial();
+  const add=(geometry,x,y,z,parent)=>{const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);parent.add(mesh);return mesh;};
+  const art={
+    box:(w,h,d,color,x,y,z,parent)=>add(new T.BoxGeometry(w,h,d),x,y,z,parent),
+    cyl:(r,rb,h,color,x,y,z,parent,n=12)=>add(new T.CylinderGeometry(r,rb,h,n),x,y,z,parent),
+    ball:(r,color,x,y,z,parent,scale=[1,1,1])=>{const mesh=add(new T.SphereGeometry(r,8,6),x,y,z,parent);mesh.scale.set(...scale);return mesh;},
+  };
+  buildIslandLandmark({id:'park',point:{x:0,z:0},parent:island,top:.67,rivers,footbridges,...art});
+  const data=collectSceneryNavigation({park:island},rivers,footbridges,.67);
+  const nav=createResidentNavigation({nodes:[{id:'park',x:0,z:0}],links:[],...data});
+  assert.equal(data.obstacles.find(obstacle=>obstacle.kind==='river').coastal,false,'the lake is distinct from rivers flowing into the sea');
+  assert.equal(data.obstacles.find(obstacle=>obstacle.kind==='river').island,'park');
+  assert.equal(data.crossings[0].deckHalfLength,2.15);
+  assert.ok(nav.clearSegment({x:0,z:-3.5},{x:0,z:3.5}),'the bridge connects both banks');
+  assert.equal(nav.walkable({x:1.5,z:0}),false,'dolls cannot walk across the lake water');
 });

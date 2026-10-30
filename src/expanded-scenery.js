@@ -1,17 +1,18 @@
+import {buildIslandLandmark, addCoastalDetails, ISLAND_THEMES} from './island-landmarks.js';
 import {createNaturalLayout, sceneryRandom} from './scenery-layout.js';
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
 const THEMES = {
-  home: ['bakery', 'orchard', 'fountain', 'greenhouse', 'picnic', 'well', 'windmill', 'cart'],
-  todo: ['workshop', 'mushrooms', 'camp', 'library', 'beehive', 'lookout', 'orchard', 'cart'],
-  note: ['windmill', 'wheat', 'library', 'greenhouse', 'cart', 'wheat', 'telescope', 'well'],
-  friends: ['picnic', 'playground', 'fountain', 'party', 'mushrooms', 'beehive', 'bakery', 'lookout'],
-  memories: ['telescope', 'camp', 'lighthouse', 'rocks', 'library', 'sculpture', 'lookout', 'orchard'],
-  park: ['pond', 'picnic', 'mushrooms', 'playground', 'well', 'greenhouse', 'fountain', 'party'],
+  home: ['bakery', 'orchard', 'greenhouse', 'picnic', 'well', 'cart', 'orchard', 'bakery'],
+  todo: ['workshop', 'vegetable', 'greenhouse', 'woodpile', 'beehive', 'cart', 'mushrooms', 'picnic'],
+  note: ['wheat', 'wheat', 'orchard', 'library', 'greenhouse', 'wheat', 'cart', 'picnic'],
+  friends: ['flowerbed', 'cafe-table', 'picnic', 'playground', 'party', 'flowerbed', 'picnic', 'bakery'],
+  memories: ['camp', 'camp', 'lookout', 'telescope', 'rocks', 'picnic', 'camp', 'sculpture'],
+  park: ['flowerbed', 'picnic', 'playground', 'mushrooms', 'flowerbed', 'well', 'picnic', 'playground'],
 };
 
-export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [], scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
+export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [], animations = [], rivers = [], footbridges = [], scene, top, box, ball, cyl, mesh, tree, curvedPath}) {
   const summary = [];
   function pocket(kind, x, z, parent, angle) {
     const group = new T.Group();
@@ -38,6 +39,21 @@ export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [
         } else s(.15,kind === 'bakery' ? '#dfb777' : '#df9b70',-.55+i*.28,.79,0,[1,.65,1]);
       }
       if (kind === 'cart') for(const side of [-1,1]) c(.24,.24,.1,'#635e50',side*.85,.2,0).rotation.z=Math.PI/2;
+    } else if (kind === 'flowerbed' || kind === 'vegetable') {
+      b(1.7,.12,1.1,wood,0,.08);b(1.5,.04,.9,'#9b8f66',0,.17);
+      for(let i=0;i<12;i++) {
+        const x=(i%4)*.39-.58,z=Math.floor(i/4)*.32-.32;
+        s(.15,green,x,.31,z,[1,.75,1]);
+        if(kind==='flowerbed') s(.1,['#dba9b4','#e5cb87','#bea8c4'][i%3],x,.45,z);
+        else s(.11,i%2?'#bf9676':'#9bad79',x,.38,z);
+      }
+    } else if (kind === 'cafe-table') {
+      c(.5,.5,.08,cream,0,.65);c(.07,.12,.6,wood,0,.31);
+      for(const side of [-1,1]) {c(.25,.27,.1,wood,side*.8,.4);c(.06,.08,.35,wood,side*.8,.2);}
+      c(.03,.03,1.7,wood,0,.9);c(0,1.05,.4,rose,0,1.9);
+    } else if (kind === 'woodpile') {
+      for(let i=0;i<9;i++) {const log=c(.15,.15,1,wood,(i%3)*.29-.3,.2+Math.floor(i/3)*.28,0);log.rotation.x=Math.PI/2;}
+      b(1.5,.08,1.3,green,0,1.15);
     } else if (kind === 'windmill') {
       c(.5,.75,1.75,cream,0,.88);
       roof('#b57e65');
@@ -161,6 +177,8 @@ export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [
     const node=nodes.find(node=>node.id===id), kinds=THEMES[id];
     const layout=createNaturalLayout({id,node,nodes,obstacles,crossings});
     const random=sceneryRandom(id+'-meadow');
+    const landmark=layout.landmark && buildIslandLandmark({id,point:layout.landmark,parent,top,box,ball,cyl,animations,rivers,footbridges});
+    addCoastalDetails({id,parent,top,box,ball,cyl});
     const placed=[];
     layout.pockets.forEach((point,index)=>{
       const kind=kinds[index%kinds.length];
@@ -170,11 +188,11 @@ export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [
     });
     layout.groves.forEach(point=>tree(point.x,point.z,point.scale,parent,point.type));
     // Irregular meadow patches soften the spaces between buildings and groves.
-    const patches=layout.anchors.slice(0,6).map(anchor=>({x:anchor.x*.86,z:anchor.z*.86}));
+    const patches=layout.anchors.slice(0,4).map(anchor=>({x:anchor.x*.86,z:anchor.z*.86}));
     patches.forEach((patch,index)=>{
       const shape=new T.Shape();
       for(let i=0;i<=12;i++) {
-        const angle=i*Math.PI/6,radius=2.2+random()*.9;
+        const angle=i*Math.PI/6,radius=1.7+random()*.8;
         const x=Math.cos(angle)*radius,z=Math.sin(angle)*radius*.75;
         if(i===0) shape.moveTo(x,z); else shape.lineTo(x,z);
       }
@@ -187,16 +205,16 @@ export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [
     });
     const dummy=new T.Object3D();
     for(const [color,height] of [['#829863',.23],['#e5cba8',.19],['#c9abc1',.17]]) {
-      const dots=new T.InstancedMesh(new T.ConeGeometry(.13,height,5),new T.MeshStandardMaterial({color,roughness:1}),360);
+      const dots=new T.InstancedMesh(new T.ConeGeometry(.13,height,5),new T.MeshStandardMaterial({color,roughness:1}),120);
       dots.userData.walkThrough=true;dots.name='meadow-flowers';
-      for(let i=0;i<360;i++) {
-        const patch=patches[i%patches.length],angle=random()*Math.PI*2,radius=Math.sqrt(random())*3.2;
+      for(let i=0;i<120;i++) {
+        const patch=patches[i%patches.length],angle=random()*Math.PI*2,radius=Math.sqrt(random())*2.6;
         dummy.position.set(patch.x+Math.cos(angle)*radius,top+.08,patch.z+Math.sin(angle)*radius);
         dummy.rotation.y=angle;dummy.updateMatrix();dots.setMatrixAt(i,dummy.matrix);
       }
       parent.add(dots);
     }
-    summary.push({id,pockets:placed,positions:layout.pockets,trees:layout.groves.length,layout:'natural-clusters'});
+    summary.push({id,pockets:placed,positions:layout.pockets,trees:layout.groves.length,layout:'themed-villages',theme:ISLAND_THEMES[id].name,landmark});
   }
 
   // A continuous plain surrounds the expanded sea, with hills behind the coast.
@@ -227,13 +245,19 @@ export function addExpandedScenery({groups, nodes, obstacles = [], crossings = [
 export function batchExpandedScenery(scene) {
   const roots = [];
   scene.traverse(object => {
-    if (['expanded-island-dressing', 'outer-plains-and-hills', 'expanded-island-paths'].includes(object.name)) roots.push(object);
+    if (['expanded-island-dressing', 'outer-plains-and-hills', 'expanded-island-paths', 'riverside-watermill'].includes(object.name)) roots.push(object);
   });
   for (const root of roots) {
     root.updateWorldMatrix(true, true);
     const inverse = root.matrixWorld.clone().invert();
-    const batches = new Map(), instances = [];
+    const batches = new Map(), instances = [], animated = [];
     root.traverse(object => {
+      if(object.userData.sceneryAnimated) {
+        animated.push({object,matrix:new T.Matrix4().multiplyMatrices(inverse,object.matrixWorld)});
+        return;
+      }
+      for(let ancestor=object.parent;ancestor && ancestor!==root;ancestor=ancestor.parent)
+        if(ancestor.userData.sceneryAnimated) return;
       if (object.isInstancedMesh) { instances.push(object); return; }
       if (!object.isMesh || Array.isArray(object.material)) return;
       const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone();
@@ -251,6 +275,10 @@ export function batchExpandedScenery(scene) {
       root.add(mesh);
     }
     if (instances.length) root.add(...instances);
+    for(const {object,matrix} of animated) {
+      matrix.decompose(object.position,object.quaternion,object.scale);
+      root.add(object);
+    }
   }
 }
 
@@ -267,6 +295,7 @@ export function addConnectedSceneryPaths({groups,nodes,navigation,scenery,curved
       x:node.x+point.x-Math.sin(point.heading)*1.8,
       z:node.z+point.z+Math.cos(point.heading)*1.8,width:.65,
     }));
+    if(island.landmark) destinations.unshift({x:node.x+island.landmark.x,z:node.z+island.landmark.z+2.9,width:1.05});
     for(const link of links.filter(link=>link.includes(node.id))) {
       const other=nodes.find(other=>other.id===link.find(id=>id!==node.id));
       const distance=Math.hypot(other.x-node.x,other.z-node.z);

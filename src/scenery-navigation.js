@@ -36,7 +36,7 @@ export function collectSceneryNavigation(groups, rivers, footbridges, top) {
     group.updateWorldMatrix(true, true);
     visit(group, island);
   }
-  for (const { curve, parent, width } of rivers) {
+  for (const { curve, parent, width, coastal = true, island: riverIsland } of rivers) {
     const points = curve.getPoints(40).map((point) => {
       point.applyMatrix4(parent.matrixWorld);
       return { x: point.x, z: point.z };
@@ -44,15 +44,16 @@ export function collectSceneryNavigation(groups, rivers, footbridges, top) {
     obstacles.push({
       id: `river-${serial++}`,
       kind: "river",
-      island: Object.entries(groups).find(([, group]) => group === parent)?.[0],
+      coastal,
+      island: riverIsland ?? Object.entries(groups).find(([, group]) => group === parent)?.[0],
       radius: width / 2,
       points,
     });
   }
   const crossings = footbridges.map(({ group, island }) => {
-    const a = new T.Vector3(0, 0, -1.5).applyMatrix4(group.matrixWorld);
-    const b = new T.Vector3(0, 0, 1.5).applyMatrix4(group.matrixWorld);
-    return { island, halfWidth: group.userData.walkHalfWidth ?? .15, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z } };
+    const a = new T.Vector3(0, 0, -(group.userData.walkCrossingHalfLength ?? 1.5)).applyMatrix4(group.matrixWorld);
+    const b = new T.Vector3(0, 0, group.userData.walkCrossingHalfLength ?? 1.5).applyMatrix4(group.matrixWorld);
+    return { island, deckHalfLength: group.userData.deckHalfLength ?? 1.15, halfWidth: group.userData.walkHalfWidth ?? .15, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z } };
   });
   return { obstacles, crossings };
 }

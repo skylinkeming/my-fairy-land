@@ -274,7 +274,7 @@ test("todo island always reopens the list and shows only the last fourteen calen
 test("expanded landscape fills the viewport and journals still work above it", async ({
   page,
 }) => {
-  await expect(page.locator(".home-label")).toHaveText("✿ 中央河畔公園");
+  await expect(page.locator(".home-label")).toHaveText("✿ 中央湖畔公園");
   await page.getByRole("button", { name: "展開地圖 ↗", exact: true }).click();
   await expect(page.locator("#map-expand")).toHaveAttribute(
     "aria-pressed",
@@ -838,10 +838,11 @@ test('real scenery navigation keeps residents out of props and connected across 
     const data = window.navigationData, results = [];
     if (!data.nodes.every(node => node.walkRadius === 12 && node.bridgeHalfWidth === .94)) throw Error('All six islands and inter-island bridges must use their expanded walking bounds');
     if (!data.crossings.every(crossing => crossing.halfWidth === .84)) throw Error('River footbridges must also use doubled widths');
-    if (data.scenery.islands.length !== 6 || data.scenery.islands.some(island => island.pockets.length < 6 || island.layout !== 'natural-clusters')) throw Error('Each island needs naturally distributed themed scenery');
+    if (data.scenery.islands.length !== 6 || data.scenery.islands.some(island => island.pockets.length < 6 || island.layout !== 'themed-villages')) throw Error('Each island needs naturally distributed themed scenery');
     if (data.scenery.islands.some(island => Math.max(...island.positions.map(point => Math.hypot(point.x, point.z))) - Math.min(...island.positions.map(point => Math.hypot(point.x, point.z))) < 2)) throw Error('Scenery must extend into the island instead of forming another ring');
-    if (data.scenery.islands.some(island => island.trees < 30 || island.paths < 6)) throw Error('Every island needs dense woodland and connected paths');
-    for (const river of data.obstacles.filter(obstacle => obstacle.kind === 'river')) {
+    if (data.scenery.islands.some(island => island.trees > 24 || island.paths < 6 || !island.landmark || !island.theme)) throw Error('Each island needs a distinct landmark, connected paths and limited woodland');
+    if (new Set(data.scenery.islands.map(island => island.landmark.kind)).size !== 6) throw Error('Every island needs its own distinct main scene');
+    for (const river of data.obstacles.filter(obstacle => obstacle.kind === 'river' && obstacle.coastal)) {
       const island = data.nodes.find(node => node.id === river.island);
       if ([river.points[0], river.points.at(-1)].some(point => Math.hypot(point.x-island.x,point.z-island.z) < 12.5)) throw Error('Rivers must extend past the shore into the sea');
       if ([river.points[0], river.points.at(-1)].some(point => data.nodes.some(other => Math.hypot(point.x-other.x,point.z-other.z) < 14.1))) throw Error('River mouths must end in open sea, clear of neighboring islands');

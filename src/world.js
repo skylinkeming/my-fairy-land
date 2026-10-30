@@ -1,3 +1,4 @@
+import {addRiversideWatermill} from './island-landmarks.js';
 import { addExpandedScenery, batchExpandedScenery, addConnectedSceneryPaths } from "./expanded-scenery.js";
 import { seatedRootHeight } from "./resident-pose.js";
 import * as T from "three";
@@ -23,6 +24,7 @@ export function createWorld(
   onReminder = () => onSelect("todo"),
   { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
 ) {
+  const sceneryAnimations = [];
   const PARK = {...BASE_PARK, z: BASE_PARK.z * 2, walkRadius: 12, bridgeHalfWidth: .94};
   const canvas = container.querySelector("canvas"),
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -526,7 +528,7 @@ export function createWorld(
     ribbon(curve, width + 0.32, top + 0.035, "#e9dbb6", parent);
     const stream = ribbon(curve, width, top + 0.06, "#91c6bb", parent);
     stream.name = "winding-river";
-    riverDefinitions.push({curve, parent, width});
+    riverDefinitions.push({curve, parent, width, coastal:true});
     for (let i = 0; i < 7; i++) {
       const glint = new T.Mesh(
         new T.CircleGeometry(0.11, 10),
@@ -608,6 +610,7 @@ export function createWorld(
   );
   footbridge(0.2, 3.5, home, 0.2);
   footbridge(-8.5, 3.55, home, .72);
+  addRiversideWatermill({parent:home,top,box,ball,cyl,animations:sceneryAnimations});
   curvedPath(
     [
       [0, 1.5],
@@ -721,7 +724,7 @@ export function createWorld(
     decorateBoardTile(group, BOARD_THEMES[id], { box, ball, cyl, mesh, top });
   }
   const originalScenery = collectSceneryNavigation({...groups, park: garden}, riverDefinitions, footbridgeDefinitions, top);
-  const expandedScenery = addExpandedScenery({obstacles: originalScenery.obstacles, crossings: originalScenery.crossings,groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
+  const expandedScenery = addExpandedScenery({animations:sceneryAnimations,rivers:riverDefinitions,footbridges:footbridgeDefinitions,obstacles: originalScenery.obstacles, crossings: originalScenery.crossings,groups: {...groups, park: garden}, nodes: [...defs, PARK], scene, top, box, ball, cyl, mesh, tree, curvedPath});
   container.dataset.expandedScenery = JSON.stringify(expandedScenery);
   container.dataset.artStyle = "catan-inspired";
   container.dataset.landAreaMultiplier = String(landScale ** 2);
@@ -853,27 +856,6 @@ export function createWorld(
   }
   updateActivityBadge();
   life.update(0);
-  // Footpaths meet the bridge landings on both ends of every cross-island journey.
-  for (const [aIndex, bIndex] of [
-    [0, 2],
-    [0, 3],
-    [2, 3],
-  ]) {
-    const a = defs[aIndex],
-      b = defs[bIndex],
-      length = Math.hypot(b.x - a.x, b.z - a.z);
-    for (const [from, to] of [
-      [a, b],
-      [b, a],
-    ]) {
-      const dx = (to.x - from.x) / length,
-        dz = (to.z - from.z) / length;
-      const points = [[0, 1.6]];
-      if (dz < -0.1) points.push([2.4, 1.4], [2.4, -2.1]);
-      points.push([dx * 11.28, dz * 11.28]);
-      curvedPath(points, groups[from.id], 0.65);
-    }
-  }
   const residents = [];
   const plushArt = createPlushArt();
   function plush(type, color, shirt, p, x, z, phase) {
@@ -1019,10 +1001,10 @@ export function createWorld(
   const reminderButton = container.querySelector("#todo-reminder");
   container.dataset.renderMode = "three";
   const labelDefs = [
-    ["todo", "待辦事項島", "一步一步，慢慢來", -5.75, 1.9, 1.4],
-    ["note", "記事本島", "留住想說的話", -2.88, 3.9, -5.05],
-    ["friends", "家人朋友島", "今天也一起散步", 2.88, 3.8, -5.05],
-    ["memories", "美好回憶島", "收藏閃閃發光的日子", 5.75, 2.2, 0.4],
+    ["todo", "待辦事項島", "森林工坊與菜園", -5.75, 1.9, 1.4],
+    ["note", "記事本島", "風車麥田與閱讀角落", -2.88, 3.9, -5.05],
+    ["friends", "家人朋友島", "花園咖啡與遊戲草坪", 2.88, 3.8, -5.05],
+    ["memories", "美好回憶島", "海邊露營與觀星", 5.75, 2.2, 0.4],
   ];
   const labels = labelDefs.map(([id, title, sub, x, y, z]) => {
     const el = document.createElement("button");
@@ -1037,7 +1019,7 @@ export function createWorld(
   });
   const hl = document.createElement("div");
   hl.className = "home-label";
-  hl.textContent = "✿ 中央河畔公園";
+  hl.textContent = "✿ 中央湖畔公園";
   container.querySelector("#world-labels").append(hl);
   let width = 1,
     height = 1;
@@ -1095,9 +1077,10 @@ export function createWorld(
           const x = actor.x - (crossing.a.x + crossing.b.x) / 2;
           const z = actor.z - (crossing.a.z + crossing.b.z) / 2;
           const along = x * ux + z * uz, lateral = x * uz - z * ux;
-          if (actor.state === 'walking' && Math.abs(along) < 1.15 && Math.abs(lateral) < (crossing.halfWidth ?? .3)) {
-            const ramp = Math.min(1, (1.15 - Math.abs(along)) / .2);
-            bridgeLift = (.23 + Math.max(0, Math.cos(along * Math.PI / 1.9)) * .15) * ramp;
+          const deckHalfLength=crossing.deckHalfLength ?? 1.15;
+          if (actor.state === 'walking' && Math.abs(along) < deckHalfLength && Math.abs(lateral) < (crossing.halfWidth ?? .3)) {
+            const ramp = Math.min(1, (deckHalfLength - Math.abs(along)) / .2);
+            bridgeLift = (.23 + Math.max(0, Math.cos(along * Math.PI / (deckHalfLength*2))) * .15) * ramp;
           }
         }
         r.g.position.set(actor.x, top + actor.yOffset + bridgeLift, actor.z);
@@ -1157,6 +1140,7 @@ export function createWorld(
         playBall.rotation.z = life.elapsed * 2;
       }
       if (!reduced) {
+        sceneryAnimations.forEach(update=>update(t));
         clouds.forEach(
           (c, i) => (c.g.position.x = c.x + Math.sin(t * 0.07 + i) * 0.4),
         );
