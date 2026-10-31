@@ -1088,10 +1088,10 @@ export function createWorld(
   const activityBadges=residents.map((resident,index)=>{
     const el=document.createElement('button');el.type='button';el.className='resident-activity-badge';el.hidden=true;
     el.dataset.resident=String(index);el.onclick=()=>visitResident(index);
-    const icon=document.createElement('span'),label=document.createElement('span'),stem=document.createElement('i');
-    icon.className='resident-badge-icon';icon.setAttribute('aria-hidden','true');label.className='resident-badge-label';stem.className='resident-badge-stem';stem.setAttribute('aria-hidden','true');
-    el.append(icon,label,stem);container.querySelector('#world-labels').append(el);
-    return {el,icon,label,resident,index};
+    const icon=document.createElement('span'),stem=document.createElement('i');
+    icon.className='resident-badge-icon';icon.setAttribute('aria-hidden','true');stem.className='resident-badge-stem';stem.setAttribute('aria-hidden','true');
+    el.append(icon,stem);container.querySelector('#world-labels').append(el);
+    return {el,icon,resident,index};
   });
   let width = 1,
     height = 1;
@@ -1319,7 +1319,7 @@ export function createWorld(
       const headX=(point.x*.5+.5)*width,headY=(-point.y*.5+.5)*height;
       if(point.z < -1 || point.z > 1 || headX<0 || headX>width || headY<0 || headY>height){badge.el.hidden=true;continue;}
       badge.el.hidden=false;badge.el.dataset.activity=marker.kind;badge.el.dataset.state=actor.state;
-      badge.icon.textContent=marker.icon;badge.label.textContent=marker.label;
+      badge.icon.textContent=marker.icon;badge.el.title=marker.label;
       badge.el.setAttribute('aria-label',`查看娃娃：${marker.label}`);
       const half=badge.el.offsetWidth/2,h=badge.el.offsetHeight;
       const x=T.MathUtils.clamp(headX,half+8,Math.max(half+8,width-half-8));

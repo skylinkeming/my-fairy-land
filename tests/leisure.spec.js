@@ -124,7 +124,8 @@ test('fishing invitations use multiple spots, show overhead status and queue whe
     return {count,invited,index:count};
   });
   expect(result.count).toBeGreaterThanOrEqual(2);expect(new Set(result.invited).size).toBe(result.count);
-  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toContainText('排隊等釣魚');
+  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toHaveAttribute('aria-label',/排隊等釣魚/);
+  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toHaveText('🎣');
   await page.locator(`.resident-activity-badge[data-resident="${result.index}"]`).click();
   await expect(page.locator('#world')).toHaveAttribute('data-paused-resident',String(result.index));
   await page.locator('#world').screenshot({path:info.outputPath('fishing-queue-marker.png')});
@@ -141,7 +142,7 @@ test('fishing invitations use multiple spots, show overhead status and queue whe
     window.testWorld.focusResident(index);return started;
   },result.index);
   expect(started).toBe(true);
-  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toContainText('釣魚中');
+  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toHaveAttribute('aria-label',/釣魚中/);
 });
 
 test('new daily stories have real props, safe movement and distinct resident preferences',async({page},info)=>{
@@ -176,7 +177,7 @@ test('gift travels from a pickup to a friend, who receives it and stores it',asy
     window.testWorld.focusResident(index);return {index,receiver:record.ids[1],phase:life.actors[index].giftPhase};
   });
   expect(result.phase).toBe('carrying');
-  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toContainText('帶禮物找朋友');
+  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toHaveAttribute('aria-label',/帶禮物找朋友/);
   await expect.poll(()=>page.evaluate(index=>{const a=window.testLife.actors[index];return window.testStories.residents[index].g.getObjectByName(`story-gift-${a.giftKind}`).visible;},result.index)).toBe(true);
   await page.locator('#world').screenshot({path:info.outputPath('carrying-gift.png')});
   const received=await page.evaluate(({index,receiver})=>{
