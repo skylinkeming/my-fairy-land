@@ -1,3 +1,5 @@
+import {createResidentStoriesArt} from './resident-stories-art.js';
+import {WEATHER_LABELS} from './island-weather.js';
 import {LEISURE_LABELS,leisureRequestMessage} from './resident-leisure.js';
 import {residentActivityMarker} from './resident-activity-marker.js';
 import {createLeisureArt} from './resident-leisure-art.js';
@@ -26,7 +28,7 @@ export function createWorld(
   onSelect,
   icon,
   onReminder = () => onSelect("todo"),
-  { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, onGroupPhotoChange = () => {}, onActivityNotice = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
+  { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, onGroupPhotoChange = () => {}, onActivityNotice = () => {}, onWeatherChange = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
 ) {
   const sceneryAnimations = [], buildingViews = [];
   let showAllInteriors = false;
@@ -839,6 +841,8 @@ export function createWorld(
     controls.touches.ONE = T.TOUCH.ROTATE;
     controls.update();
     controls.enableDamping = !reduced;
+    const actor=life.actors[index],companion=life.actors[actor.umbrellaPartner];
+    frameResidents(companion?[actor,companion]:[actor]);
     focusedResident = index;
     container.dataset.focusedResident = String(index);
   }
@@ -925,6 +929,8 @@ export function createWorld(
     resident.cup=cup;
   });
   const leisureArt=createLeisureArt({scene,residents,sites:life.leisure.sites,top});
+  const storiesArt=createResidentStoriesArt({scene,residents,life,top});
+  let lastWeather=null;
   let lastPhotoPhase='idle',lastPhotoArrived=-1;
   function visibleTree(object) {
     for(let node=object;node;node=node.parent)if(!node.visible)return false;
@@ -943,12 +949,13 @@ export function createWorld(
     const raycaster=new T.Raycaster(),preferred=group?0:actors[0].target.heading||0;
     let best=null;
     const angles=group?[0,Math.PI,-Math.PI/2,Math.PI/2,-Math.PI/4,Math.PI/4,Math.PI*3/4,-Math.PI*3/4]:[0,-Math.PI/4,Math.PI/4,-Math.PI/2,Math.PI/2,-Math.PI*3/4,Math.PI*3/4,Math.PI];
-    for(const elevation of [16,24])for(const offset of angles) {
+    for(const elevation of (group?[16,24]:[4,8,16,24]))for(const offset of angles) {
       const angle=preferred+offset,position=new T.Vector3(center.x+Math.sin(angle)*12,top+elevation,center.z+Math.cos(angle)*12);
       let visible=0;
-      for(const point of points) {
+      for(const [index,point] of points.entries()) {
         let clear=true;
-        for(const height of [.65,1.2]) {
+        const head=residents[actors[index].id].headHeight||1.7;
+        for(const height of [.45,head*.75,head]) {
           const target=new T.Vector3(point.x,top+height,point.z),direction=target.clone().sub(position);
           raycaster.set(position,direction.clone().normalize());raycaster.far=direction.length()-.08;
           if(raycaster.intersectObjects(occluders,false).length){clear=false;break;}
@@ -960,6 +967,8 @@ export function createWorld(
       if(visible===points.length)break;
     }
     if(!best)return;
+    if(!group)controls.maxPolarAngle=Math.max(controls.maxPolarAngle,1.35);
+    container.dataset.focusVisibleResidents=String(best.visible);
     focusedResident=group?null:actors[0].id;
     controls.target.set(center.x,top+.8,center.z);camera.position.copy(best.position);
     camera.zoom=Math.min(14,(camera.right-camera.left)/(group?8.5:4),(camera.top-camera.bottom)/(group?7:4));
@@ -1118,6 +1127,8 @@ export function createWorld(
     if (focusedResident !== null) {
       const resident = residents[focusedResident];
       const target = resident.g.position.clone().add(new T.Vector3(0, .85, 0));
+      const companion=life.actors[focusedResident].umbrellaPartner;
+      if(companion!=null)target.add(residents[companion].g.position.clone().add(new T.Vector3(0,.85,0))).multiplyScalar(.5);
       camera.position.add(target.clone().sub(controls.target));
       controls.target.copy(target);
     }
@@ -1136,8 +1147,10 @@ export function createWorld(
     }
     container.dataset.openBuildings=JSON.stringify(openBuildings);
     const followed=life.actors[focusedResident];
-    if(followed?.target?.leisureSite&&followed.state!=='walking'&&framedLeisureSite!==followed.target.leisureSite) {
-      framedLeisureSite=followed.target.leisureSite;frameResidents([followed]);
+    const companion=followed?.umbrellaPartner==null?null:life.actors[followed.umbrellaPartner];
+    const shared=companion&&Math.hypot(followed.x-companion.x,followed.z-companion.z)<2.2;
+    if(followed?.target?.leisureSite&&(followed.state!=='walking'||shared)&&framedLeisureSite!==followed.target.leisureSite) {
+      framedLeisureSite=followed.target.leisureSite;frameResidents(shared?[followed,companion]:[followed]);
     }
     container.dataset.leisureActivities=JSON.stringify(life.descriptions());
     const photoPhase=life.leisure.photo?.phase||'idle';
@@ -1210,12 +1223,18 @@ export function createWorld(
           if(r.arms[1]) r.arms[1].rotation.x=-.55-sip*.65;
         }
         leisureArt.update(actor,r,reduced);
+        storiesArt.update(actor,r,reduced);
         if (!reduced && !life.isPaused(i) && t < greetUntil && i === greetIndex && !seated) {
           r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.14;
           r.arms[1].rotation.z = -1.2 + Math.sin(t * 7) * 0.4;
         }
       });
       leisureArt.updateSites(life.actors,reduced);
+      storiesArt.updateWorld(reduced);
+      const weather=life.weather.state;
+      sun.intensity=weather==='sunny'?2.5:weather==='cloudy'?1.8:1.25;
+      container.dataset.weather=weather;
+      if(lastWeather!==weather){lastWeather=weather;frameDirty=true;onWeatherChange({state:weather,label:WEATHER_LABELS[weather]});}
       swingPivots.forEach((pivot, slot) => {
         const rider = life.actors.find(
           (actor) => actor.slot === slot && actor.state === "swinging",
@@ -1292,7 +1311,7 @@ export function createWorld(
     }
     const badgeRects=[];
     for(const badge of activityBadges) {
-      const actor=life.actors[badge.index],marker=residentActivityMarker(actor,life.isPaused(actor.id));
+      const actor=life.actors[badge.index],marker=residentActivityMarker(actor,life.isPaused(actor.id),life.weather.state);
       if(!marker){badge.el.hidden=true;continue;}
       const point=badge.resident.g.getWorldPosition(new T.Vector3());point.y+=(badge.resident.headHeight||1.7)+.12;point.project(camera);
       const headX=(point.x*.5+.5)*width,headY=(-point.y*.5+.5)*height;
@@ -1393,6 +1412,7 @@ export function createWorld(
       resizeObserver.disconnect();
       activityBadges.forEach(badge=>badge.el.remove());
       leisureArt.dispose();
+      storiesArt.dispose();
       residents.forEach(resident => disposeShapeGeometry(resident.g));
       controls.dispose();
       scene.traverse((object) => {
@@ -1459,6 +1479,8 @@ export function createWorld(
       if(result.status==='queued'||result.status==='already-active')onActivityNotice(leisureRequestMessage(result));
       finishResidentVisit();frameDirty=true;focusedResident=index;framedLeisureSite=null;return true;
     },
+    setWeather(state){const changed=life.weather.set(state);if(changed){life.leisure.update(0);frameDirty=true;}return changed;},
+    getWeather(){return life.weather.state;},
     getActivityRequestMessage(){return leisureRequestMessage(life.leisure.lastRequest);},
     takeGroupPhoto() {
       finishResidentVisit();

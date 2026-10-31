@@ -60,6 +60,7 @@ export function FriendsPanel({
             </span>
             <h3>{resident.name}</h3>
             <p>{resident.role}</p>
+            <p className="resident-preference">{activities[index]?.preference}</p>
             <button
               className="secondary-button resident-edit-button"
               data-edit-resident={index}

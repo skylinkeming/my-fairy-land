@@ -177,6 +177,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
   const [localHousehold, setHousehold] = useState(()=>loadHousehold(scope.storageKey)),
     [panel, setPanel] = useState(null),
     [photo, setPhoto] = useState(null);
+  const [weather,setWeather]=useState({state:'sunny',label:'☀️ 晴天'});
   const [groupPhoto,setGroupPhoto]=useState({phase:'idle'});
   const [expanded, setExpanded] = useState(false),
     [pan, setPan] = useState(false),
@@ -461,6 +462,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
               onEdit={editShape}
               onGroupPhotoChange={setGroupPhoto}
               onActivityNotice={notify}
+              onWeatherChange={setWeather}
               shapes={shapes}
               suspended={Boolean(panel) || editor !== null || familyOpen}
             />
@@ -502,6 +504,10 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
               >
                 看看娃娃 ♡
               </button>
+              <button id="island-weather" className="map-expand-button" disabled={!ready} title="切換島上的晴天、陰天與雨天；天氣也會自動輪替"
+                aria-label={`島上天氣：${weather.label}，按下切換天氣`} onClick={()=>{
+                  const states=['sunny','cloudy','rainy'];worldRef.current?.setWeather(states[(states.indexOf(weather.state)+1)%states.length]);
+                }}>{weather.label}</button>
               <button id="group-photo" className="map-expand-button" disabled={!ready}
                 onClick={()=>{
                   if(['gathering','posing'].includes(groupPhoto.phase)){worldRef.current?.cancelGroupPhoto();return;}

@@ -369,17 +369,17 @@ test("resident activity summaries include new activities and the watch button br
   page,
 }) => {
   const before = await page.locator("#resident-activity").textContent();
-  expect(before).toMatch(/散步|盪鞦韆|玩耍|釣魚|野餐|照顧花園|拍風景照/);
+  expect(before).toMatch(/散步|盪鞦韆|玩耍|釣魚|野餐|照顧花園|拍風景照|蝴蝶|池塘|追球|樹蔭|送小禮物/);
   await page.reload();
   await expect(page.locator(".map-label")).toHaveCount(4, { timeout: 45000 });
-  await expect(page.locator("#resident-activity")).toContainText(/散步|盪鞦韆|玩耍|釣魚|野餐|照顧花園|拍風景照/);
+  await expect(page.locator("#resident-activity")).toContainText(/散步|盪鞦韆|玩耍|釣魚|野餐|照顧花園|拍風景照|蝴蝶|池塘|追球|樹蔭|送小禮物/);
   await page.getByRole("button", { name: "看看娃娃", exact: true }).click();
   await expect(page.locator(".map-expanded")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.locator(".label-friends").click();
   await expect(page.locator(".resident-status")).toHaveCount(6);
   await expect(page.locator(".resident-status").first()).toContainText(
-    /散步|風景|鞦韆|玩球|聊天|發呆|放空|釣魚|野餐|澆水|相機/,
+    /散步|風景|鞦韆|玩球|聊天|發呆|放空|釣魚|野餐|澆水|相機|蝴蝶|池塘|追著小球|樹蔭/,
   );
 });
 
@@ -395,7 +395,7 @@ test("residents start with varied activities across islands and can still be ins
   await expect(cards).toHaveCount(6);
   const islands = await cards.evaluateAll(elements => elements.map(element => element.dataset.residentIsland));
   expect(new Set(islands).size).toBeGreaterThanOrEqual(3);
-  await expect(page.locator('.resident-status').filter({hasText:/釣魚|野餐|澆水|相機/})).toHaveCount(3);
+  await expect(page.locator('.resident-status').filter({hasText:/釣魚|野餐|澆水|相機|蝴蝶|池塘|追著小球|樹蔭/})).toHaveCount(3);
   await cards.first().locator('[data-watch-resident]').click();
   await expect(page.locator('#world')).toHaveAttribute('data-paused-resident', '0');
 });

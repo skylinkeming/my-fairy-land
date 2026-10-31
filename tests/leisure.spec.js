@@ -6,11 +6,11 @@ test.beforeEach(async({page},info)=>{
   await page.emulateMedia({reducedMotion:'reduce'});
   // Use the real simulation and renderer, with access to their instances so
   // journeys can be simulated without waiting several real-world minutes.
-  for(const [file,factory,variable] of [['resident-life.js','createResidentLife','testLife'],['world.js','createWorld','testWorld'],['resident-leisure-art.js','createLeisureArt','testArt']]) {
+  for(const [file,factory,variable] of [['resident-life.js','createResidentLife','testLife'],['world.js','createWorld','testWorld'],['resident-leisure-art.js','createLeisureArt','testArt'],['resident-stories-art.js','createResidentStoriesArt','testStories']]) {
     await page.route(url=>url.pathname===`/src/${file}`&&!url.searchParams.has('leisure-original'),route=>route.fulfill({contentType:'text/javascript',body:`
       export * from '/src/${file}?leisure-original';
       import {${factory} as original} from '/src/${file}?leisure-original';
-      export function ${factory}(...args){${factory==='createResidentLife'?(initial?'args[0]={...args[0],leisureInitial:true};':"let seed=7;args[0]={...args[0],leisureInitial:false,random:()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}};"):''}const value=original(...args);window.${variable}=${variable==='testArt'?'args[0]':'value'};return value;}
+      export function ${factory}(...args){${factory==='createResidentLife'?(initial?'args[0]={...args[0],leisureInitial:true};':"let seed=7;args[0]={...args[0],leisureInitial:false,random:()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}};"):''}const value=original(...args);window.${variable}=${['testArt','testStories'].includes(variable)?'args[0]':'value'};return value;}
     `}));
   }
   await page.goto('/');
@@ -20,10 +20,10 @@ test.beforeEach(async({page},info)=>{
 test('refresh starts with residents already doing random activities, with visible props',async({page},info)=>{
   const snapshot=()=>page.evaluate(()=>{
     const life=window.testLife,active=life.actors.filter(actor=>actor.target?.leisureSite);
-    const names={fishing:'leisure-fishing-rod',picnic:'leisure-biscuit',garden:'leisure-watering-can',photo:'leisure-camera'};
+    const names={fishing:'leisure-fishing-rod',picnic:'leisure-biscuit',garden:'leisure-watering-can',photo:'leisure-camera',wildlife:'story-butterfly',pond:'story-butterfly',shade:'story-hand-fan'};
     return {
       active:active.map(actor=>({id:actor.id,state:actor.state,kind:actor.target.leisureKind,time:actor.leisureTime})),
-      visible:active.every(actor=>window.testArt.residents[actor.id].g.getObjectByName(names[actor.target.leisureKind]).visible),
+      visible:active.every(actor=>actor.target.leisureKind==='ball'?window.testStories.scene.getObjectByName('story-site-ball').visible:window.testArt.residents[actor.id].g.getObjectByName(names[actor.target.leisureKind]).visible),
       safe:life.actors.every(actor=>life.navigation.walkable(actor)&&life.actors.every(other=>other===actor||Math.hypot(actor.x-other.x,actor.z-other.z)>=1.18-1e-6)),
     };
   });
@@ -33,7 +33,7 @@ test('refresh starts with residents already doing random activities, with visibl
   expect(new Set(before.active.map(actor=>actor.kind)).size).toBeGreaterThanOrEqual(2);
   expect(before.visible).toBe(true);expect(before.safe).toBe(true);
   await page.locator('.island-card[data-open="friends"]').click();
-  await expect(page.locator('.resident-status').filter({hasText:/釣魚|野餐|澆水|相機/})).toHaveCount(3);
+  await expect(page.locator('.resident-status').filter({hasText:/釣魚|野餐|澆水|相機|蝴蝶|池塘|追著小球|樹蔭/})).toHaveCount(3);
   await page.locator('#close-panel').click();
   await page.reload();await page.waitForFunction(()=>window.testLife&&window.testWorld&&window.testArt,null,{timeout:90000});
   const after=await snapshot();expect(after.active).toHaveLength(3);expect(after.visible).toBe(true);expect(after.safe).toBe(true);
@@ -44,7 +44,7 @@ test('refresh starts with residents already doing random activities, with visibl
 test('all four activities use real scenery, props and safe walking routes',async({page},info)=>{
   test.setTimeout(180000);
   const sites=await page.evaluate(()=>window.testLife.leisure.sites.map(site=>site.kind));
-  expect([...new Set(sites)].sort()).toEqual(['fishing','garden','photo','picnic']);
+  expect([...new Set(sites)]).toEqual(expect.arrayContaining(['fishing','garden','photo','picnic','wildlife','pond','ball','gift','shade','shelter','rainwalk']));
   expect(sites.filter(kind=>kind==='fishing').length).toBeGreaterThanOrEqual(2);
   for(const [kind,label,state,prop] of [['fishing','去釣魚','fishing','leisure-fishing-rod'],['picnic','去野餐','picnicking','leisure-biscuit'],['garden','照顧花園','gardening','leisure-watering-can'],['photo','去拍風景','photographing','leisure-camera']]) {
     const index=await page.evaluate(kind=>{
@@ -54,6 +54,7 @@ test('all four activities use real scenery, props and safe walking routes',async
     },kind);
     if(await page.locator('#map-expand').getAttribute('aria-pressed')==='true')await page.locator('#map-expand').click();
     await page.locator('.island-card[data-open="friends"]').click();await page.locator(`[data-greet="${index}"]`).click();
+    await page.getByText('選擇一個小日常',{exact:true}).click();
     await page.getByRole('button',{name:label,exact:true}).click();
     const result=await page.evaluate(({index,state,kind})=>{
       const life=window.testLife,actor=life.actors[index];
@@ -141,4 +142,83 @@ test('fishing invitations use multiple spots, show overhead status and queue whe
   },result.index);
   expect(started).toBe(true);
   await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toContainText('釣魚中');
+});
+
+test('new daily stories have real props, safe movement and distinct resident preferences',async({page},info)=>{
+  test.setTimeout(300000);
+  for(const [index,kind,state,prop] of [[1,'wildlife','watching','story-butterfly'],[4,'pond','pond-watching','story-little-animal'],[5,'ball','playing-ball',null],[0,'shade','fanning','story-hand-fan']]){
+    const reached=await page.evaluate(({index,kind,state})=>{
+      const life=window.testLife;if(!window.testWorld.doActivity(index,kind))throw Error(JSON.stringify(life.leisure.lastRequest));
+      for(let i=0;i<2400&&life.actors[index].state!==state;i++)life.update(.1,true);
+      window.testWorld.focusResident(index);return life.actors[index].state===state;
+    },{index,kind,state});
+    expect(reached,kind).toBe(true);
+    const badge=page.locator(`.resident-activity-badge[data-resident="${index}"]`);await expect(badge).toBeVisible();
+    if(prop)await expect.poll(()=>page.evaluate(({index,prop})=>window.testStories.residents[index].g.getObjectByName(prop).visible,{index,prop})).toBe(true);
+    await page.locator('#world').screenshot({path:info.outputPath(`${kind}.png`)});
+    await page.evaluate(()=>{window.testWorld.endResidentVisit();for(let i=0;i<600&&window.testLife.leisure.active.length;i++)window.testLife.update(.1,true);});
+  }
+  await page.evaluate(()=>window.testWorld.reset());
+  if(await page.locator('#map-expand').getAttribute('aria-pressed')==='true')await page.locator('#map-expand').click();
+  await page.locator('.island-card[data-open="friends"]').click();
+  await expect(page.locator('.resident-preference')).toHaveCount(6);
+  await expect(page.locator('.resident-preference').nth(1)).toContainText('花園');
+  await expect(page.locator('.resident-preference').nth(4)).toContainText('池塘');
+  await expect(page.locator('.resident-preference').nth(5)).toContainText('追球');
+});
+
+test('gift travels from a pickup to a friend, who receives it and stores it',async({page},info)=>{
+  const result=await page.evaluate(()=>{
+    const life=window.testLife;const index=life.actors.find(actor=>actor.node==='home')?.id??0;
+    if(!window.testWorld.doActivity(index,'gift'))throw Error(JSON.stringify(life.leisure.lastRequest));
+    const record=life.leisure.active.find(record=>record.kind==='gift');
+    for(let i=0;i<2400&&life.actors[index].giftPhase!=='carrying';i++)life.update(.1,true);
+    window.testWorld.focusResident(index);return {index,receiver:record.ids[1],phase:life.actors[index].giftPhase};
+  });
+  expect(result.phase).toBe('carrying');
+  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toContainText('帶禮物找朋友');
+  await expect.poll(()=>page.evaluate(index=>{const a=window.testLife.actors[index];return window.testStories.residents[index].g.getObjectByName(`story-gift-${a.giftKind}`).visible;},result.index)).toBe(true);
+  await page.locator('#world').screenshot({path:info.outputPath('carrying-gift.png')});
+  const received=await page.evaluate(({index,receiver})=>{
+    const life=window.testLife;window.testWorld.endResidentVisit();
+    for(let i=0;i<2400&&life.actors[receiver].giftPhase!=='receiving';i++)life.update(.1,true);
+    window.testWorld.focusResident(receiver);return {phase:life.actors[receiver].giftPhase,gifts:life.actors[receiver].receivedGifts};
+  },result);
+  expect(received.phase).toBe('receiving');expect(received.gifts).toHaveLength(1);
+  await page.locator('#world').screenshot({path:info.outputPath('receiving-gift.png')});
+  await page.evaluate(()=>{window.testWorld.endResidentVisit();for(let i=0;i<100;i++)window.testLife.update(.1,true);});
+  expect(await page.evaluate(index=>window.testLife.actors[index].giftPhase,result.receiver)).toBe(null);
+});
+
+test('weather control shows rain, real shared umbrellas, shelter and sunny shade on a phone',async({page},info)=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#island-weather').click();await expect(page.locator('#world')).toHaveAttribute('data-weather','cloudy');
+  await page.locator('#island-weather').click();await expect(page.locator('#world')).toHaveAttribute('data-weather','rainy');
+  await expect.poll(()=>page.evaluate(()=>window.testStories.scene.getObjectByName('story-rain').visible)).toBe(true);
+  const pair=await page.evaluate(()=>{
+    const life=window.testLife;
+    for(const a of life.actors)if(window.testWorld.doActivity(a.id,'rainwalk')){
+      const record=life.leisure.active.find(record=>record.kind==='rainwalk');
+      for(let i=0;i<2400&&life.leisure.active.find(r=>r.kind==='rainwalk')?.phase!=='walking';i++)life.update(.1,true);
+      window.testWorld.focusResident(a.id);return record.ids;
+    }
+    throw Error('No reachable umbrella meeting');
+  });
+  const debug=await page.evaluate(ids=>({active:window.testLife.leisure.active,actors:ids.map(id=>{const a=window.testLife.actors[id];return {id,x:a.x,z:a.z,state:a.state,partner:a.umbrellaPartner,target:a.target,route:a.route,index:a.routeIndex,blocked:a.leisureStall};})}),pair);
+  expect(debug.active.some(record=>record.kind==='rainwalk'&&record.phase==='walking'),JSON.stringify(debug)).toBe(true);
+  const umbrellas=()=>page.evaluate(ids=>ids.map(id=>({visible:window.testStories.residents[id].g.getObjectByName('story-umbrella').visible,state:window.testLife.actors[id].state})),pair);
+  await expect.poll(async()=> (await umbrellas()).filter(item=>item.visible).length).toBe(1);
+  await expect(page.locator('#world')).toHaveAttribute('data-focus-visible-residents','2');
+  await page.locator('#world').screenshot({path:info.outputPath('shared-umbrella-phone.png')});
+  await page.evaluate(()=>{window.testWorld.endResidentVisit();for(let i=0;i<700;i++)window.testLife.update(.1,true);});
+  const sheltered=await page.evaluate(()=>{
+    const life=window.testLife;if(!window.testWorld.doActivity(0,'shelter'))return false;
+    for(let i=0;i<2400&&life.actors[0].state!=='sheltering';i++)life.update(.1,true);
+    window.testWorld.focusResident(0);return life.actors[0].state==='sheltering';
+  });expect(sheltered).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>window.testStories.residents[0].g.getObjectByName('story-umbrella').visible)).toBe(false);
+  await page.locator('#world').screenshot({path:info.outputPath('rain-shelter-phone.png')});
+  await page.evaluate(()=>window.testWorld.endResidentVisit());
+  await page.locator('#island-weather').click();await expect(page.locator('#world')).toHaveAttribute('data-weather','sunny');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

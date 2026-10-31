@@ -85,6 +85,10 @@ export function createResidentNavigation({
   const walkable = (point, ignore) =>
     onGround(point) && !blocked(point, ignore);
   function clearSegment(a, b, ignore = null) {
+    // Sampling can miss a shallow graze of a small round obstacle. Check its
+    // full swept segment so the planned route is also safe for each tiny step.
+    if(obstacles.some(obstacle=>obstacle.id!==ignore&&obstacle.kind!=='river'&&obstacle.radius!==undefined&&
+      segmentDistance(obstacle,a,b)<obstacle.radius+clearance-1e-7))return false;
     const length = distance(a, b),
       steps = Math.max(1, Math.ceil(length / 0.1));
     for (let i = 0; i <= steps; i++) {

@@ -69,6 +69,7 @@ export function WorldViewport({
   onEdit,
   onGroupPhotoChange,
   onActivityNotice,
+  onWeatherChange,
   shapes,
   suspended,
 }) {
@@ -82,6 +83,7 @@ export function WorldViewport({
       onEdit,
       onGroupPhotoChange,
       onActivityNotice,
+      onWeatherChange,
       shapes,
       suspended,
     });
@@ -94,6 +96,7 @@ export function WorldViewport({
     onEdit,
     onGroupPhotoChange,
     onActivityNotice,
+    onWeatherChange,
     suspended,
   };
   const [reducedMotion, setReducedMotion] = useState(
@@ -154,6 +157,7 @@ export function WorldViewport({
               lastGreetings.current.set(index,greeting);
               setVisit({index,name,greeting});
             },
+            onWeatherChange:value=>callbacks.current.onWeatherChange?.(value),
             onActivityNotice:value=>callbacks.current.onActivityNotice?.(value),
             onGroupPhotoChange: value=>callbacks.current.onGroupPhotoChange?.(value),
             onEditResident: (index) => callbacks.current.onEdit(index),
@@ -245,10 +249,15 @@ export function WorldViewport({
         <button type="button" onClick={()=>{
           if(!worldRef.current?.goHome(visit.index)) setVisit(value=>({...value,greeting:'家裡的座位正有人使用，等一下再回去休息吧。'}));
         }}>回家休息</button>
-        {[["fishing","去釣魚"],["picnic","去野餐"],["garden","照顧花園"],["photo","去拍風景"]].map(([kind,label])=><button key={kind} type="button" onClick={()=>{
+        </div>
+        <details className="resident-activity-menu" key={visit?.index??-1}>
+        <summary>選擇一個小日常</summary>
+        <div className="resident-dialog-actions">
+        {[["fishing","去釣魚"],["picnic","去野餐"],["garden","照顧花園"],["photo","去拍風景"],["wildlife","看蝴蝶與小動物"],["pond","去看池塘"],["ball","去追球"],["gift","送小禮物"],["shade","樹蔭下搧風"],["shelter","去涼亭避雨"],["rainwalk","邀朋友共傘散步"]].map(([kind,label])=><button key={kind} type="button" onClick={()=>{
           if(!worldRef.current?.doActivity(visit.index,kind))setVisit(value=>({...value,greeting:worldRef.current?.getActivityRequestMessage?.()||'活動暫時無法安排，請稍後再試。'}));
         }}>{label}</button>)}
         </div>
+        </details>
       </section>
     </div>
   );

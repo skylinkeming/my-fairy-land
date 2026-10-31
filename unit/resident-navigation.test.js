@@ -234,3 +234,11 @@ test('the park lake has a real walkable flower bridge instead of a water shortcu
   assert.ok(nav.clearSegment({x:0,z:-3.5},{x:0,z:3.5}),'the bridge connects both banks');
   assert.equal(nav.walkable({x:1.5,z:0}),false,'dolls cannot walk across the lake water');
 });
+
+test('routes reject a shallow graze of a small circular plant instead of stalling on approach',()=>{
+ const nav=createResidentNavigation({nodes:[{id:'home',x:0,z:0,walkRadius:12}],links:[],obstacles:[{id:'plant',x:-10.218970761071613,z:-2.823495945447813,radius:.1649492046773434}]});
+ const start={x:-10.812374990383116,z:-3.0212917019285173},end={x:-11.2,z:-1.6};
+ assert.ok(nav.walkable(start)&&nav.walkable(end));assert.equal(nav.clearSegment(start,end),false);
+ const route=nav.route(start,end);assert.ok(route&&route.length>2);
+ for(let i=1;i<route.length;i++)assert.ok(nav.clearSegment(route[i-1],route[i]));
+});

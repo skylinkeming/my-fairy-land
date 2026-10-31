@@ -1,3 +1,5 @@
+import {DEFAULT_RESIDENT_TYPES,PREFERENCE_LABELS,weightedResident} from './resident-preferences.js';
+import {createIslandWeather} from './island-weather.js';
 import {createLeisureSites,createLeisureController,LEISURE_LABELS} from './resident-leisure.js';
 import {roomContains} from './building-space.js';
 import { steerRight, walkingDirection } from "./resident-avoidance.js";
@@ -152,6 +154,7 @@ export function createResidentLife({
   leisureSites = null,
   leisureAutomatic = true,
   leisureInitial = true,
+  residentTypes = DEFAULT_RESIDENT_TYPES,
 }) {
   const navigation = sharedNavigation(nodes, links, obstacles, crossings);
   const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -181,6 +184,7 @@ export function createResidentLife({
     if (!point) throw new Error(`No safe resident spawn on ${node.id}`);
     actors.push({
       id,
+      type:residentTypes[id]||'bear',
       slot: id,
       phase: random() * Math.PI * 2,
       x: point.x,
@@ -415,6 +419,7 @@ export function createResidentLife({
       }
     }
     let pair = shuffled(available).slice(0, 2);
+    if(leisure&&mode==='play'){pair[0]=weightedResident(available,'ball',random);pair[1]=shuffled(available.filter(actor=>actor!==pair[0]))[0];}
     let activity =
       mode === "swing"
         ? random() < 0.5
@@ -482,12 +487,16 @@ export function createResidentLife({
   }
   actors.forEach(begin);
   const sites=leisureSites ? leisureSites.map(site=>({...site,center:{...site.center},points:site.points.map(point=>({...point})),growth:0})) : (leisure?createLeisureSites({nodes,navigation,crossings,allow:point=>!buildings.some(room=>roomContains(room,point,.5))}):[]);
-  const leisureController=createLeisureController({actors,navigation,sites,random,automatic:leisureAutomatic,isPaused:id=>paused.has(id),
+  const weather=createIslandWeather({automatic:leisureAutomatic&&leisure});
+  let manualUpdate=false;
+  const leisureController=createLeisureController({actors,navigation,sites,random,weather,automatic:leisureAutomatic,isPaused:id=>paused.has(id),
     start(actor,target,manual,initial=false) {
       if(gathering?.ids.includes(actor.id)) {
         const companions=gathering.ids.map(id=>actors[id]).filter(other=>other!==actor);gathering=null;
         for(const other of companions){other.activity='wander';other.partner=null;if(!paused.has(other.id))begin(other);}
       }
+      if(target.leisureKind!=='gift')actor.giftPhase=null;
+      if(target.leisureKind!=='rainwalk')actor.umbrellaPartner=null;
       actor.leisureExit=null;actor.requestedLeisure=target;actor.requestedIndoor=null;actor.activity='leisure';actor.partner=null;
       actor.coffeeWith=null;actor.manualIndoor=false;actor.nextIndoorVisit=elapsed+60;
       // Initial placement happens before the world is rendered. Later invitations
@@ -664,6 +673,7 @@ export function createResidentLife({
   }
   function step(dt) {
     elapsed += dt;
+    if(!manualUpdate)weather.update(dt);
     if(sites.length)leisureController.update(dt);
     if (paused.size) nextChange += dt;
     if (elapsed >= nextChange) {
@@ -951,6 +961,7 @@ export function createResidentLife({
     }
   }
   function update(dt,manualOnly=false) {
+    manualUpdate=manualOnly;
     // Complete the short walk away before reduced motion freezes a released spot.
     for(const actor of actors)if(actor.leisureExit&&distance(actor,actor.leisureExit)>=1.6){actor.leisureExit=null;if(!actor.target?.leisureSite)actor.manualLeisure=Boolean(actor.leisureQueue);}
     const frozen=[];
@@ -972,12 +983,21 @@ export function createResidentLife({
     visitBuilding(index,type=null) {return Boolean(actors[index] && requestIndoor(actors[index],type,true));},
     get hasManualVisits() {return actors.some(actor=>(actor.manualIndoor || actor.manualLeisure) && !paused.has(actor.id));},
     leisure:leisureController,
+    weather,
     requestLeisure(index,kind){return leisureController.request(index,kind);},
     pause(index) {
-      if (actors[index]) { paused.add(index); actors[index].paused = true; }
+      if (actors[index]) {
+        const actor=actors[index],partner=actors[actor.umbrellaPartner];
+        if(partner&&!paused.has(partner.id)){actor.pausedCompanion=partner.id;paused.add(partner.id);partner.paused=true;}
+        paused.add(index);actor.paused=true;
+      }
     },
     resume(index) {
-      if (actors[index]) { paused.delete(index); actors[index].paused = false; }
+      if (actors[index]) {
+        const actor=actors[index];
+        if(actor.pausedCompanion!=null){const partner=actors[actor.pausedCompanion];paused.delete(partner.id);partner.paused=false;actor.pausedCompanion=null;}
+        paused.delete(index);actor.paused=false;
+      }
     },
     isPaused(index) {
       return paused.has(index);
@@ -985,11 +1005,20 @@ export function createResidentLife({
     descriptions() {
       return actors.map((actor) => ({
         state: actor.state,
+        preference:PREFERENCE_LABELS[actor.type],
         island: actor.node,
         building:actor.target?.roomId || actor.target?.leavingRoom || null,
         label: paused.has(actor.id)
           ? "停下來和你打招呼"
           : {
+              watching:actor.type==='rabbit'?'追幾步蝴蝶，再停下觀察':actor.type==='frog'?'蹲著看蝴蝶與小動物':'歪頭看蝴蝶和小動物',
+              'pond-watching':'在池塘邊觀察小魚',
+              'playing-ball':'追著小球跑，停下再追',
+              'gift-picking':'撿起一份漂亮的小禮物',
+              'gift-waiting':'等朋友送來小禮物',
+              'gift-giving':'把小禮物送給朋友',
+              fanning:'坐在樹蔭下搧風',sheltering:'在小涼亭裡等雨停',
+              'sharing-umbrella':'和朋友共撐一把傘',
               fishing: `在碼頭釣魚${actor.leisureResult?({fish:' · 釣到小魚！',seaweed:' · 釣到海草',boot:' · 居然是舊靴子！'}[actor.leisureResult]):'，等魚上鉤'}` ,
               picnicking: actor.leisureTime<3?'鋪好野餐墊，等朋友一起吃點心':actor.leisureTime>23?'一起收拾野餐籃':'和朋友分享餅乾、享受野餐',
               gardening: actor.leisureTime<6?'在花園播種':actor.leisureTime<20?'替小花澆水':'蹲下欣賞開花的小花園',

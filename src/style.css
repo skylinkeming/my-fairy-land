@@ -3596,3 +3596,12 @@ body.family-open {overflow:hidden;}
 .resident-badge-stem { position:absolute;left:calc(50% + var(--badge-tail,0px));top:100%;width:2px;height:var(--badge-stem,10px);background:#fff8dfcc;pointer-events:none; }
 .resident-badge-stem::after { content:'';position:absolute;left:-3px;bottom:0;width:8px;height:8px;border-radius:50%;background:#ffe2a1;border:1px solid #fff9e8; }
 .resident-activity-badge:focus-visible { outline:3px solid #624d95;outline-offset:3px; }
+.resident-preference { font-size:12px;color:#6e795c; }
+.resident-activity-badge[data-activity="wildlife"],.resident-activity-badge[data-activity="pond"],.resident-activity-badge[data-activity="shade"] { background:#d5edbc;color:#355737; }
+.resident-activity-badge[data-activity="gift"] { background:#f7cedd;color:#75455a; }
+.resident-activity-badge[data-activity="rainwalk"],.resident-activity-badge[data-activity="shelter"] { background:#c9dce9;color:#385c78; }
+.resident-activity-badge[data-activity="ball"] { background:#f6d1a6;color:#77522e; }
+.resident-dialog-actions { max-height:min(38vh,310px);overflow-y:auto;overscroll-behavior:contain; }
+.resident-activity-menu { margin-top:10px; }
+.resident-activity-menu summary { cursor:pointer;padding:8px;border:1px solid #d6b880;border-radius:14px;background:#f4e5c7;font-size:13px; }
+.resident-activity-menu summary:focus-visible { outline:3px solid #a87643;outline-offset:3px; }
