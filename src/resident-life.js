@@ -1,3 +1,4 @@
+import {createLeisureSites,createLeisureController,LEISURE_LABELS} from './resident-leisure.js';
 import {roomContains} from './building-space.js';
 import { steerRight, walkingDirection } from "./resident-avoidance.js";
 import { createResidentNavigation } from "./resident-navigation.js";
@@ -147,6 +148,9 @@ export function createResidentLife({
   obstacles = EMPTY_SCENERY,
   crossings = EMPTY_SCENERY,
   buildings = EMPTY_SCENERY,
+  leisure = false,
+  leisureSites = null,
+  leisureAutomatic = true,
 }) {
   const navigation = sharedNavigation(nodes, links, obstacles, crossings);
   const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -230,7 +234,7 @@ export function createResidentLife({
   let gathering = null;
   const seatOwners=new Map();
   let coffeeGatherings=0;
-  const protectedVisit=actor=>Boolean(actor.target?.roomId || actor.target?.leavingRoom);
+  const protectedVisit=actor=>Boolean(actor.target?.roomId || actor.target?.leavingRoom || actor.target?.leisureSite);
   function occupancy(id) {
     return actors.filter(
       (actor) => actor.node === id || actor.target?.node === id,
@@ -342,11 +346,11 @@ export function createResidentLife({
     if (oldTarget?.ignore && oldTarget.approach && !navigation.walkable(actor))
       actor.exitObstacle = { id: oldTarget.ignore, point: oldTarget.approach };
     const origin = actor.exitObstacle?.point || actor;
-    let target = actor.requestedIndoor || goal(actor),
+    let target = actor.requestedIndoor || actor.requestedLeisure || goal(actor),
       route =
         target.point &&
         navigation.route(origin, target.approach || target.point);
-    actor.requestedIndoor=null;
+    actor.requestedIndoor=null;actor.requestedLeisure=null;
     if(oldTarget?.ignore && oldTarget.ignore!==target.ignore && seatOwners.get(oldTarget.ignore)===actor.id) seatOwners.delete(oldTarget.ignore);
     if (route && target.approach) {
       if (navigation.clearSegment(target.approach, target.point, target.ignore))
@@ -363,11 +367,13 @@ export function createResidentLife({
     }
     if (route && actor.exitObstacle) route.unshift({ x: actor.x, z: actor.z });
     actor.departure = null;
+    actor.trafficRoute=false;actor.leisureStall=0;actor.progressWaypoint=null;
     actor.avoidance = null;
     actor.bridgeLane = null;
     actor.bridgeYield = null;
     actor.goalMode = mode;
     actor.target = target;
+    if(!target.leisureSite)actor.manualLeisure=false;
     actor.route = route || [{ x: actor.x, z: actor.z }];
     actor.routeIndex = 1;
     actor.state = route ? "walking" : "waiting";
@@ -407,7 +413,7 @@ export function createResidentLife({
       }
     }
     let pair = shuffled(available).slice(0, 2);
-    const activity =
+    let activity =
       mode === "swing"
         ? random() < 0.5
           ? "swing"
@@ -415,6 +421,7 @@ export function createResidentLife({
         : random() < 0.3
           ? "pairwalk"
           : "play";
+    if(!park && (activity==="swing" || activity==="chat"))activity="play";
     const localPair = activity === "play" || activity === "pairwalk";
     if (localPair)
       pair[1] = [...available]
@@ -472,6 +479,22 @@ export function createResidentLife({
     if (quiet) quiet.activity = "daydream";
   }
   actors.forEach(begin);
+  const sites=leisureSites ? leisureSites.map(site=>({...site,center:{...site.center},points:site.points.map(point=>({...point})),growth:0})) : (leisure?createLeisureSites({nodes,navigation,crossings,allow:point=>!buildings.some(room=>roomContains(room,point,.5))}):[]);
+  const leisureController=createLeisureController({actors,navigation,sites,random,automatic:leisureAutomatic,isPaused:id=>paused.has(id),
+    start(actor,target,manual) {
+      if(gathering?.ids.includes(actor.id)) {
+        const companions=gathering.ids.map(id=>actors[id]).filter(other=>other!==actor);gathering=null;
+        for(const other of companions){other.activity='wander';other.partner=null;if(!paused.has(other.id))begin(other);}
+      }
+      actor.requestedLeisure=target;actor.requestedIndoor=null;actor.activity='leisure';actor.partner=null;
+      actor.coffeeWith=null;actor.manualIndoor=false;actor.nextIndoorVisit=elapsed+60;
+      begin(actor);actor.manualLeisure=Boolean(manual&&actor.target?.leisureSite);
+    },
+    finish(actor) {
+      actor.activity='wander';actor.partner=null;actor.manualLeisure=false;
+      actor.nextIndoorVisit=elapsed+25+random()*30;actor.leisureCompleted=(actor.leisureCompleted||0)+1;begin(actor);
+    }});
+
   function ignoredObstacle(actor) {
     if (actor.exitObstacle) return actor.exitObstacle.id;
     return actor.target?.ignore &&
@@ -523,7 +546,7 @@ export function createResidentLife({
     const step = Math.min(amount, remaining);
     const desired = {x: (next.x - actor.x) / remaining, z: (next.z - actor.z) / remaining};
     const narrow = bridges.some(bridge => bridge.halfWidth < .8 && inBridge(actor, bridge, 2, 1.5));
-    let direction = narrow ? desired : steerRight(actor, actors, desired), aligning = false;
+    let direction = narrow || actor.trafficRoute ? desired : steerRight(actor, actors, desired), aligning = false;
     for (const bridge of bridges) {
       if (!inBridge(actor, bridge, .8, bridge.halfWidth + .2)) continue;
       if (bridge.halfWidth >= .8) {
@@ -621,6 +644,7 @@ export function createResidentLife({
   }
   function step(dt) {
     elapsed += dt;
+    if(sites.length)leisureController.update(dt);
     if (paused.size) nextChange += dt;
     if (elapsed >= nextChange) {
       mode = chooseActivity(mode, random);
@@ -801,6 +825,12 @@ export function createResidentLife({
           actor.departure.heading = actor.heading;
         } else {
           const next = actor.route[actor.routeIndex];
+          if(next&&actor.target?.leisureSite) {
+            const remaining=distance(actor,next);
+            if(actor.progressWaypoint!==next||remaining<actor.progressDistance-.04) {
+              actor.progressWaypoint=next;actor.progressDistance=remaining;actor.leisureStall=0;
+            } else actor.leisureStall+=dt;
+          }
           if (next && moveWalker(actor, next, dt * 0.95)) actor.routeIndex++;
           if (actor.routeIndex >= actor.route.length) {
             actor.state = actor.target.state;
@@ -813,18 +843,19 @@ export function createResidentLife({
             if(actor.state==='indoors') actor.roomEnteredAt=elapsed;
             if(actor.target.leavingRoom) {actor.manualIndoor=false;actor.nextIndoorVisit=elapsed+90+random()*40;}
           } else if (
-            next && actor.yielding
+            next && (actor.yielding || actor.leisureStall>3)
           ) {
             actor.blockedTime += dt;
-            if (actor.blockedTime > 3) {
+            if (actor.blockedTime > 3 || actor.leisureStall>3) {
               const target = actor.target.approach || actor.target.point;
               const heading = chooseDeparture(actor, actor.heading, random, heading => {
                 const point = {x: actor.x + Math.sin(heading) * 2, z: actor.z + Math.cos(heading) * 2};
                 return navigation.clearSegment(actor, point, ignoredObstacle(actor)) &&
                   actors.every(other => other === actor || distance(point, other) >= RESIDENT_SPACING);
               }, Math.PI);
-              let path = null;
-              if (heading !== null) {
+              let path = actor.target?.leisureSite && !actor.exitObstacle ? navigation.route(actor,target,{avoid:actors.filter(other=>other!==actor)}) : null;
+              actor.trafficRoute=Boolean(path);
+              if (!path && heading !== null) {
                 const via = {x: actor.x + Math.sin(heading) * 2, z: actor.z + Math.cos(heading) * 2};
                 const remainder = navigation.route(via, target);
                 if (remainder) path = [{x: actor.x, z: actor.z}, ...remainder];
@@ -836,7 +867,7 @@ export function createResidentLife({
                 actor.routeIndex = 1;
                 actor.avoidance = null;
               }
-              actor.blockedTime = 0;
+              actor.blockedTime = 0;actor.leisureStall=0;
             }
           } else actor.blockedTime = 0;
         }
@@ -901,7 +932,7 @@ export function createResidentLife({
   }
   function update(dt,manualOnly=false) {
     const frozen=[];
-    if(manualOnly) for(const actor of actors) if(!actor.manualIndoor && !paused.has(actor.id)) {frozen.push([actor,actor.paused]);paused.add(actor.id);actor.paused=true;}
+    if(manualOnly) for(const actor of actors) if(!actor.manualIndoor && !actor.manualLeisure && !paused.has(actor.id)) {frozen.push([actor,actor.paused]);paused.add(actor.id);actor.paused=true;}
     let remaining = Math.max(0, dt);
     if (!remaining) step(0);
     while (remaining > 1e-9) {
@@ -917,7 +948,9 @@ export function createResidentLife({
     update,
     initialMode,
     visitBuilding(index,type=null) {return Boolean(actors[index] && requestIndoor(actors[index],type,true));},
-    get hasManualVisits() {return actors.some(actor=>actor.manualIndoor && !paused.has(actor.id));},
+    get hasManualVisits() {return actors.some(actor=>(actor.manualIndoor || actor.manualLeisure) && !paused.has(actor.id));},
+    leisure:leisureController,
+    requestLeisure(index,kind){return leisureController.request(index,kind);},
     pause(index) {
       if (actors[index]) { paused.add(index); actors[index].paused = true; }
     },
@@ -935,7 +968,12 @@ export function createResidentLife({
         label: paused.has(actor.id)
           ? "停下來和你打招呼"
           : {
-              walking: actor.target?.roomId ? `走進${actor.target.roomName}找座位` : actor.target?.leavingRoom ? "喝完茶，走出屋子繼續散步" :
+              fishing: `在碼頭釣魚${actor.leisureResult?({fish:' · 釣到小魚！',seaweed:' · 釣到海草',boot:' · 居然是舊靴子！'}[actor.leisureResult]):'，等魚上鉤'}` ,
+              picnicking: actor.leisureTime<3?'鋪好野餐墊，等朋友一起吃點心':actor.leisureTime>23?'一起收拾野餐籃':'和朋友分享餅乾、享受野餐',
+              gardening: actor.leisureTime<6?'在花園播種':actor.leisureTime<20?'替小花澆水':'蹲下欣賞開花的小花園',
+              photographing: '拿著相機拍風景、查看照片',
+              'photo-posing': actor.target?.leisureKind==='photo'?'和朋友擺好姿勢拍照':'和家人排好隊，準備拍合照',
+              walking: actor.target?.leisureSite ? `正在去${LEISURE_LABELS[actor.target.leisureKind] || '集合拍合照'}` : actor.target?.roomId ? `走進${actor.target.roomName}找座位` : actor.target?.leavingRoom ? "喝完茶，走出屋子繼續散步" :
                 actor.departure || actor.activity === "wander"
                   ? "自在散步、探索小島中"
                   : actor.activity === "pairwalk"

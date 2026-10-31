@@ -850,7 +850,7 @@ test('real scenery navigation keeps residents out of props and connected across 
     const {createResidentLife} = await import('/src/resident-life.js');
     const data = window.navigationData, results = [];
     if (!data.nodes.every(node => node.walkRadius === 12 && node.bridgeHalfWidth === .94)) throw Error('All six islands and inter-island bridges must use their expanded walking bounds');
-    if (!data.crossings.every(crossing => crossing.halfWidth === .84)) throw Error('River footbridges must also use doubled widths');
+    if (!data.crossings.filter(crossing=>!crossing.coastalDeck).every(crossing => crossing.halfWidth === .84)) throw Error('River footbridges must also use doubled widths');
     if (data.buildings.length !== 6 || !data.buildings.some(room=>room.type==='cafe')) throw Error('All six islands need a usable indoor building');
     const check = createResidentLife({...data,count:1,random:()=>.1});
     for(const room of data.buildings) {

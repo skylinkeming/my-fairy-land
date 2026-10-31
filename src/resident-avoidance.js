@@ -13,11 +13,24 @@ export function walkingDirection(actor) {
 export function predictsCollision(actor, other, direction, otherDirection) {
   const px = other.x - actor.x, pz = other.z - actor.z;
   if (px * direction.x + pz * direction.z < -.25) return false;
-  const vx = (otherDirection.x - direction.x) * .95;
-  const vz = (otherDirection.z - direction.z) * .95;
-  const speed2 = vx * vx + vz * vz;
-  const time = speed2 > .0001 ? Math.max(0, Math.min(3, -(px * vx + pz * vz) / speed2)) : 0;
-  return Math.hypot(px + vx * time, pz + vz * time) < 1.45;
+  const stoppingTime=walker=>{
+    const last=walker.route?.at(-1);
+    return !walker.departure && last && walker.routeIndex===walker.route.length-1 ? Math.min(3,distance(walker,last)/.95) : 3;
+  };
+  const stop=stoppingTime(actor),otherStop=stoppingTime(other);
+  // A resident stops at its final seat/pose. Predicting motion beyond the goal
+  // made neighbours avoid imaginary collisions and circle around a gathering.
+  const boundaries=[...new Set([0,stop,otherStop,3])].sort((a,b)=>a-b);
+  for(let i=0;i<boundaries.length-1;i++) {
+    const from=boundaries[i],until=boundaries[i+1];
+    const x=px+otherDirection.x*.95*Math.min(from,otherStop)-direction.x*.95*Math.min(from,stop);
+    const z=pz+otherDirection.z*.95*Math.min(from,otherStop)-direction.z*.95*Math.min(from,stop);
+    const vx=((from<otherStop?otherDirection.x:0)-(from<stop?direction.x:0))*.95;
+    const vz=((from<otherStop?otherDirection.z:0)-(from<stop?direction.z:0))*.95;
+    const speed2=vx*vx+vz*vz,time=speed2>.0001?Math.max(0,Math.min(until-from,-(x*vx+z*vz)/speed2)):0;
+    if(Math.hypot(x+vx*time,z+vz*time)<1.45)return true;
+  }
+  return false;
 }
 
 export function steerRight(actor, actors, direction) {

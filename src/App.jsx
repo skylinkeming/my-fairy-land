@@ -177,6 +177,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
   const [localHousehold, setHousehold] = useState(()=>loadHousehold(scope.storageKey)),
     [panel, setPanel] = useState(null),
     [photo, setPhoto] = useState(null);
+  const [groupPhoto,setGroupPhoto]=useState({phase:'idle'});
   const [expanded, setExpanded] = useState(false),
     [pan, setPan] = useState(false),
     [interiors, setInteriors] = useState(false),
@@ -458,6 +459,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
               onMode={onMode}
               onReady={onReady}
               onEdit={editShape}
+              onGroupPhotoChange={setGroupPhoto}
               shapes={shapes}
               suspended={Boolean(panel) || editor !== null || familyOpen}
             />
@@ -499,6 +501,15 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
               >
                 看看娃娃 ♡
               </button>
+              <button id="group-photo" className="map-expand-button" disabled={!ready}
+                onClick={()=>{
+                  if(['gathering','posing'].includes(groupPhoto.phase)){worldRef.current?.cancelGroupPhoto();return;}
+                  if(worldRef.current?.takeGroupPhoto()){setExpanded(true);setGroupPhoto({phase:'gathering'});notify('大家正在前往集合，排好隊就會拍照。');}
+                  else notify('目前找不到足夠安全的合照空間，請稍後再試。');
+                }}>{['gathering','posing'].includes(groupPhoto.phase)?'取消合照集合':'大家拍一張'}</button>
+              {groupPhoto.phase==='gathering'&&<small className="group-photo-progress" role="status">集合中 {groupPhoto.arrived||0}/{groupPhoto.total||6}</small>}
+              {groupPhoto.phase==='ready'&&<a className="map-expand-button group-photo-download" href={groupPhoto.url} download="our-little-island-family.png">下載合照</a>}
+              <span className="sr-only" role="status">{groupPhoto.phase==='posing'?'大家到齊，準備拍照':groupPhoto.phase==='ready'?'合照完成，可以下載保存':groupPhoto.phase==='cancelled'?'合照集合已取消':groupPhoto.phase==='error'?'照片無法產生，請再試一次':''}</span>
               <button
                 id="view-interiors"
                 className="map-expand-button"

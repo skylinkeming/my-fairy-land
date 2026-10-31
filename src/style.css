@@ -3582,3 +3582,7 @@ body.family-open {overflow:hidden;}
 .shape-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
 .shape-sync { padding: .6rem 0; font-size: .85rem; }
 .shape-sync [role="alert"] { color: #984a3b; }
+
+.group-photo-download { display: inline-flex; align-items: center; color: #516647; text-decoration: none; }
+
+.group-photo-progress { color: #725f43; white-space: nowrap; padding: 0 4px; }

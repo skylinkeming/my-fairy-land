@@ -1,3 +1,5 @@
+import {LEISURE_LABELS} from './resident-leisure.js';
+import {createLeisureArt} from './resident-leisure-art.js';
 import {buildEnterableBuilding,clearBuildingFootprints,roomContains} from './enterable-buildings.js';
 import {addRiversideWatermill} from './island-landmarks.js';
 import { addExpandedScenery, batchExpandedScenery, addConnectedSceneryPaths } from "./expanded-scenery.js";
@@ -23,7 +25,7 @@ export function createWorld(
   onSelect,
   icon,
   onReminder = () => onSelect("todo"),
-  { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
+  { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, onGroupPhotoChange = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
 ) {
   const sceneryAnimations = [], buildingViews = [];
   let showAllInteriors = false;
@@ -783,6 +785,7 @@ export function createWorld(
   const life = createResidentLife({
     ...navigationData,
     buildings:roomData,
+    leisure:true,
     nodes: [...defs, PARK],
     links: [
       ["home", "todo"],
@@ -838,9 +841,12 @@ export function createWorld(
     focusedResident = index;
     container.dataset.focusedResident = String(index);
   }
+  let activitySignature='';
   function updateActivityBadge() {
+    const kinds=[...new Set(life.actors.filter(actor=>actor.target?.leisureSite).map(actor=>LEISURE_LABELS[actor.target.leisureKind]||'合照'))];
+    activitySignature=life.mode+':'+kinds.join(',');
     container.dataset.residentActivity = life.mode;
-    onActivityChange({mode: life.mode, label: ACTIVITY_LABELS[life.mode]});
+    onActivityChange({mode: life.mode, label:kinds.length?`島上小日常 · ${kinds.join('、')}`:ACTIVITY_LABELS[life.mode]});
   }
   updateActivityBadge();
   life.update(0);
@@ -917,12 +923,59 @@ export function createWorld(
     const handle=mesh(new T.TorusGeometry(.055,.015,5,12),'#f0e4ce',cup);handle.position.x=.1;handle.rotation.y=Math.PI/2;
     resident.cup=cup;
   });
+  const leisureArt=createLeisureArt({scene,residents,sites:life.leisure.sites,top});
+  let lastPhotoPhase='idle',lastPhotoArrived=-1;
+  function visibleTree(object) {
+    for(let node=object;node;node=node.parent)if(!node.visible)return false;
+    return true;
+  }
+  function frameResidents(actors,group=false) {
+    const points=actors.map(actor=>group?actor.target.point:actor);
+    const center=points.reduce((sum,point)=>({x:sum.x+point.x/points.length,z:sum.z+point.z/points.length}),{x:0,z:0});
+    scene.updateMatrixWorld(true);
+    const occluders=[];
+    scene.traverse(object=>{
+      if(!object.isMesh||!visibleTree(object))return;
+      for(let node=object;node;node=node.parent)if(residents.some(resident=>resident.g===node))return;
+      occluders.push(object);
+    });
+    const raycaster=new T.Raycaster(),preferred=group?0:actors[0].target.heading||0;
+    let best=null;
+    const angles=group?[0,Math.PI,-Math.PI/2,Math.PI/2,-Math.PI/4,Math.PI/4,Math.PI*3/4,-Math.PI*3/4]:[0,-Math.PI/4,Math.PI/4,-Math.PI/2,Math.PI/2,-Math.PI*3/4,Math.PI*3/4,Math.PI];
+    for(const elevation of [16,24])for(const offset of angles) {
+      const angle=preferred+offset,position=new T.Vector3(center.x+Math.sin(angle)*12,top+elevation,center.z+Math.cos(angle)*12);
+      let visible=0;
+      for(const point of points) {
+        let clear=true;
+        for(const height of [.65,1.2]) {
+          const target=new T.Vector3(point.x,top+height,point.z),direction=target.clone().sub(position);
+          raycaster.set(position,direction.clone().normalize());raycaster.far=direction.length()-.08;
+          if(raycaster.intersectObjects(occluders,false).length){clear=false;break;}
+        }
+        if(clear)visible++;
+      }
+      const score=visible*100-elevation*.01-Math.abs(offset)*.01;
+      if(!best||score>best.score)best={score,position,angle,visible};
+      if(visible===points.length)break;
+    }
+    if(!best)return;
+    focusedResident=group?null:actors[0].id;
+    controls.target.set(center.x,top+.8,center.z);camera.position.copy(best.position);
+    camera.zoom=Math.min(14,(camera.right-camera.left)/(group?8.5:4),(camera.top-camera.bottom)/(group?7:4));
+    camera.updateProjectionMatrix();controls.update();frameDirty=true;
+    if(group){container.dataset.photoVisibleResidents=String(best.visible);actors.forEach(actor=>{actor.target.heading=best.angle;actor.heading=best.angle;});}
+    else if(actors[0].state==='photographing'&&!life.leisure.active.some(record=>record.ids.includes(actors[0].id)&&record.ids.length>1)){actors[0].target.heading=best.angle;actors[0].heading=best.angle;}
+  }
+  function frameGroupPhoto(){if(life.leisure.photo)frameResidents(life.actors,true);}
+  let framedLeisureSite=null;
   function setResidentShapes(settings) {
     frameDirty = true;
     residents.forEach((resident, index) => {
       applyResidentShape(resident.g, settings[RESIDENT_SHAPE_IDS[index]]);
       resident.g.updateWorldMatrix(true,true);
-      resident.headHeight=new T.Box3().setFromObject(resident.g).max.y-resident.g.getWorldPosition(new T.Vector3()).y;
+      const bounds=new T.Box3();
+      resident.g.children.filter(part=>part.userData.shapePart).forEach(part=>bounds.expandByObject(part,true));
+      resident.headHeight=bounds.max.y-resident.g.getWorldPosition(new T.Vector3()).y;
     });
   }
   setResidentShapes(residentShapes);
@@ -1073,8 +1126,22 @@ export function createWorld(
       if(open) openBuildings.push(roomData[index].id);
     }
     container.dataset.openBuildings=JSON.stringify(openBuildings);
+    const followed=life.actors[focusedResident];
+    if(followed?.target?.leisureSite&&followed.state!=='walking'&&framedLeisureSite!==followed.target.leisureSite) {
+      framedLeisureSite=followed.target.leisureSite;frameResidents([followed]);
+    }
+    container.dataset.leisureActivities=JSON.stringify(life.descriptions());
+    const photoPhase=life.leisure.photo?.phase||'idle';
+    if(photoPhase!==lastPhotoPhase) {
+      lastPhotoPhase=photoPhase;container.dataset.groupPhoto=photoPhase;
+      if(photoPhase==='posing')frameGroupPhoto();
+      if(photoPhase!=='ready'&&photoPhase!=='finished')onGroupPhotoChange({phase:photoPhase});
+    }
+    const arrived=life.actors.filter(actor=>actor.state==='photo-posing'&&actor.target?.leisureSite==='group-photo').length;
+    if(photoPhase==='gathering'&&arrived!==lastPhotoArrived){lastPhotoArrived=arrived;onGroupPhotoChange({phase:'gathering',arrived,total:life.actors.length});}
     container.dataset.indoorResidents=JSON.stringify(life.actors.filter(actor=>actor.state==='indoors').map(actor=>actor.id));
-    if (previousMode !== life.mode) updateActivityBadge();
+    const signature=life.mode+':'+[...new Set(life.actors.filter(actor=>actor.target?.leisureSite).map(actor=>LEISURE_LABELS[actor.target.leisureKind]||'合照'))].join(',');
+    if (previousMode !== life.mode || signature!==activitySignature) updateActivityBadge();
     {
       residents.forEach((r, i) => {
         const actor = life.actors[i];
@@ -1086,7 +1153,8 @@ export function createWorld(
           const z = actor.z - (crossing.a.z + crossing.b.z) / 2;
           const along = x * ux + z * uz, lateral = x * uz - z * ux;
           const deckHalfLength=crossing.deckHalfLength ?? 1.15;
-          if (actor.state === 'walking' && Math.abs(along) < deckHalfLength && Math.abs(lateral) < (crossing.halfWidth ?? .3)) {
+          if (crossing.coastalDeck && Math.abs(along)<deckHalfLength+.2 && Math.abs(lateral)<crossing.halfWidth) bridgeLift=Math.max(bridgeLift,crossing.lift||.09);
+          if (!crossing.coastalDeck && actor.state === 'walking' && Math.abs(along) < deckHalfLength && Math.abs(lateral) < (crossing.halfWidth ?? .3)) {
             const ramp = Math.min(1, (deckHalfLength - Math.abs(along)) / .2);
             bridgeLift = (.23 + Math.max(0, Math.cos(along * Math.PI / (deckHalfLength*2))) * .15) * ramp;
           }
@@ -1095,7 +1163,7 @@ export function createWorld(
         const floorLift=room?room.floorY-top:0;
         r.g.position.set(actor.x, top + actor.yOffset + bridgeLift + floorLift, actor.z);
         r.g.rotation.set(0, actor.heading, 0);
-        const seated = actor.state === "swinging" || actor.state === "chatting" || actor.state === "indoors";
+        const seated = actor.state === "swinging" || actor.state === "chatting" || actor.state === "indoors" || actor.state === "picnicking";
         const walking = actor.state === "walking" || actor.state === "strolling";
         r.feet.forEach((foot, j) => {
           foot.position.y = actor.state==='indoors' ? .08 : seated ? 0.23 : (foot.userData.restY ?? 0.1);
@@ -1107,7 +1175,7 @@ export function createWorld(
                 : 0);
         });
         if (seated) {
-          const seatSurface = actor.state==='indoors' ? actor.target.seatHeight : actor.state === "chatting"
+          const seatSurface = actor.state==='picnicking' ? top+.16 : actor.state==='indoors' ? actor.target.seatHeight : actor.state === "chatting"
             ? top + PARK.chatBench.height + .075 / 2
             : top + 2.8 - Math.cos(actor.swingAngle) * 1.75 + .1 / 2;
           r.g.position.y = seatedRootHeight(r.g, seatSurface);
@@ -1132,11 +1200,13 @@ export function createWorld(
           r.cup.rotation.x=-sip*.25;
           if(r.arms[1]) r.arms[1].rotation.x=-.55-sip*.65;
         }
+        leisureArt.update(actor,r,reduced);
         if (!reduced && !life.isPaused(i) && t < greetUntil && i === greetIndex && !seated) {
           r.g.position.y += Math.abs(Math.sin(t * 8)) * 0.14;
           r.arms[1].rotation.z = -1.2 + Math.sin(t * 7) * 0.4;
         }
       });
+      leisureArt.updateSites(life.actors,reduced);
       swingPivots.forEach((pivot, slot) => {
         const rider = life.actors.find(
           (actor) => actor.slot === slot && actor.state === "swinging",
@@ -1243,6 +1313,11 @@ export function createWorld(
     // Static scenes need no GPU redraw until a command, resize or camera move.
     if (!reduced || manualMotion || cameraChanged || frameDirty) {
       renderer.render(scene, camera);
+      if(life.leisure.photo?.phase==='ready') {
+        try {onGroupPhotoChange({phase:'ready',url:canvas.toDataURL('image/png')});}
+        catch {onGroupPhotoChange({phase:'error'});}
+        life.leisure.releasePhoto();
+      }
       frameDirty = false;
     }
   }
@@ -1264,7 +1339,7 @@ export function createWorld(
       ),
       camera,
     );
-    const residentHit = ray.intersectObjects(residents.map(resident => resident.g), true)[0];
+    const residentHit = ray.intersectObjects(residents.map(resident => resident.g), true).find(hit=>visibleTree(hit.object));
     if (residentHit) {
       const index = residents.findIndex(resident => {
         let object = residentHit.object;
@@ -1287,6 +1362,7 @@ export function createWorld(
     dispose() {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+      leisureArt.dispose();
       residents.forEach(resident => disposeShapeGeometry(resident.g));
       controls.dispose();
       scene.traverse((object) => {
@@ -1328,7 +1404,7 @@ export function createWorld(
       frameDirty = true;
       todoBalloon.visible = count > 0;
     },
-    getNavigationData() {return {nodes: [...defs, PARK], links: [["home","todo"],["home","note"],["home","friends"],["home","memories"],["note","friends"],["home","park"]], ...navigationData, buildings:roomData, scenery: expandedScenery};},
+    getNavigationData() {return {nodes: [...defs, PARK], links: [["home","todo"],["home","note"],["home","friends"],["home","memories"],["note","friends"],["home","park"]], ...navigationData, leisure:true,leisureSites:life.leisure.sites, buildings:roomData, scenery: expandedScenery};},
     setInteriorsVisible(enabled) {showAllInteriors=Boolean(enabled);frameDirty=true;},
     goForCoffee(index) {
       if(!life.visitBuilding(index,'cafe')) return false;
@@ -1347,6 +1423,16 @@ export function createWorld(
       camera.zoom=7;camera.updateProjectionMatrix();controls.update();
       container.dataset.followedResident=String(index);return true;
     },
+    doActivity(index,kind) {
+      if(!life.requestLeisure(index,kind))return false;
+      finishResidentVisit();frameDirty=true;focusedResident=index;framedLeisureSite=null;return true;
+    },
+    takeGroupPhoto() {
+      finishResidentVisit();
+      if(!life.leisure.groupPhoto())return false;
+      frameGroupPhoto();frameDirty=true;onGroupPhotoChange({phase:'gathering'});return true;
+    },
+    cancelGroupPhoto(){const cancelled=life.leisure.cancelPhoto();if(cancelled){frameDirty=true;onGroupPhotoChange({phase:'cancelled'});}return cancelled;},
     getResidentActivities() {
       return life.descriptions();
     },

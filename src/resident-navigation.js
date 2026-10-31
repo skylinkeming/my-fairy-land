@@ -38,6 +38,7 @@ export function createResidentNavigation({
   function onGround(point) {
     return (
       nodes.some((node) => distance(point, node) <= (node.walkRadius || 6)) ||
+      crossings.some(crossing=>crossing.coastalDeck && segmentDistance(point,crossing.a,crossing.b)<=crossing.halfWidth) ||
       bridges.some(
         (bridge) => segmentDistance(point, bridge.a, bridge.b) <= bridge.halfWidth,
       )
@@ -223,11 +224,14 @@ export function createResidentNavigation({
         }
       : null;
   }
-  function route(start, goal) {
+  function route(start, goal, {avoid=[],spacing=1.24}={}) {
     start = { x: start.x, z: start.z };
     goal = { x: goal.x, z: goal.z };
     if (!walkable(start) || !walkable(goal)) return null;
-    if (clearSegment(start, goal)) return [{ ...start }, { ...goal }];
+    const margins=avoid.map(other=>Math.min(spacing,distance(start,other))-1e-7);
+    const trafficClear=(a,b)=>avoid.every((other,i)=>segmentDistance(other,a,b)>=margins[i]);
+    const clear=(a,b)=>clearSegment(a,b)&&trafficClear(a,b);
+    if (clear(start, goal)) return [{ ...start }, { ...goal }];
     const neighbors = (point) => {
       const nearby = [...connected]
         .filter((index) => distance(points[index], point) <= 3)
@@ -236,7 +240,7 @@ export function createResidentNavigation({
         );
       const visible = [];
       for (const index of nearby)
-        if (clearSegment(point, points[index])) {
+        if (clear(point, points[index])) {
           visible.push(index);
           if (visible.length === 16) break;
         }
@@ -295,6 +299,7 @@ export function createResidentNavigation({
         break;
       }
       for (const [next, cost] of edges[current]) {
+        if(avoid.length && !trafficClear(points[current],points[next]))continue;
         const score = scores.get(current) + cost;
         if (score >= (scores.get(next) ?? Infinity)) continue;
         scores.set(next, score);
@@ -310,7 +315,7 @@ export function createResidentNavigation({
     const smooth = [path[0]];
     for (let i = 0; i < path.length - 1; ) {
       let next = path.length - 1;
-      while (next > i + 1 && !clearSegment(path[i], path[next])) next--;
+      while (next > i + 1 && !clear(path[i], path[next])) next--;
       smooth.push({ ...path[next] });
       i = next;
     }

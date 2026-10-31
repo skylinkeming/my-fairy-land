@@ -144,7 +144,7 @@ export function addRiversideWatermill({parent,top,box,ball,cyl,animations}) {
 
 export function addCoastalDetails({id,parent,top,box,ball,cyl}) {
   if(id!=='memories') return;
-  const dock=new T.Group();dock.name='memory-island-pier';dock.userData.walkObstacle=true;dock.position.set(8.1,top+.05,8.7);dock.rotation.y=-.16;parent.add(dock);
+  const dock=new T.Group();dock.name='memory-island-pier';dock.userData.walkThrough=true;dock.userData.walkDeck=true;dock.position.set(8.1,top+.05,8.7);dock.rotation.y=-.16;parent.add(dock);
   for(let i=0;i<12;i++) box(1.7,.08,.24,'#b79b76',0,0,i*.27,dock);
   for(const x of [-.82,.82]) for(const z of [0,1.5,3]) {cyl(.055,.07,.7,'#9c8464',x,-.18,z,dock,6);ball(.075,'#cfb792',x,.18,z,dock);}
   const rod=box(.025,1.8,.025,'#8c8069',.55,.8,2.7,dock);rod.rotation.x=.7;

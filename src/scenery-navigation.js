@@ -1,9 +1,13 @@
 import * as T from "three";
 
 export function collectSceneryNavigation(groups, rivers, footbridges, top) {
-  const obstacles = [];
+  const obstacles = [], decks = [];
   let serial = 0;
   function visit(object, island) {
+    if (object.userData.walkDeck) {
+      const a=new T.Vector3(0,0,0).applyMatrix4(object.matrixWorld),b=new T.Vector3(0,0,2.6).applyMatrix4(object.matrixWorld);
+      decks.push({island,coastalDeck:true,halfWidth:.35,deckHalfLength:1.5,lift:.09,a:{x:a.x,z:a.z},b:{x:b.x,z:b.z}});
+    }
     if (object.userData.walkThrough) return;
     if (object.userData.walkObstacleRadius) {
       const position = object.getWorldPosition(new T.Vector3());
@@ -55,5 +59,6 @@ export function collectSceneryNavigation(groups, rivers, footbridges, top) {
     const b = new T.Vector3(0, 0, group.userData.walkCrossingHalfLength ?? 1.5).applyMatrix4(group.matrixWorld);
     return { island, deckHalfLength: group.userData.deckHalfLength ?? 1.15, halfWidth: group.userData.walkHalfWidth ?? .15, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z } };
   });
+  crossings.push(...decks);
   return { obstacles, crossings };
 }
