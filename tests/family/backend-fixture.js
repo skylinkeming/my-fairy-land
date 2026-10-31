@@ -11,16 +11,16 @@ export function session(user) {
   const encode=data=>Buffer.from(JSON.stringify(data)).toString('base64url');
   return {access_token:`${encode({alg:'HS256',typ:'JWT'})}.${encode({sub:user.id,role:'authenticated',aud:'authenticated',email:user.email,exp:Math.floor(Date.now()/1000)+3600})}.test`,refresh_token:'test-refresh',token_type:'bearer',expires_in:3600,user};
 }
-export async function installBackend(page,{families=false,member=false,twoFamilies=false}={}) {
+export async function installBackend(page,{families=false,member=false,twoFamilies=false,sharedDb=null}={}) {
   const created=new Date().toISOString();
-  const db={families:[],members:[],invites:[],sequence:0,requests:[],nextGoogleEmail:'a@example.test',oauthFailure:null,oauthTokenFailure:false};
+  const db=sharedDb||{families:[],members:[],invites:[],todos:[],sequence:0,requests:[],nextGoogleEmail:'a@example.test',oauthFailure:null,oauthTokenFailure:false};
   backends.set(page,db);
-  if(families) {
+  if(families&&!sharedDb) {
     db.families.push({id:FAMILY_A,name:'溫暖的小家',owner_id:A,created_at:created});
     db.members.push({family_id:FAMILY_A,user_id:A,display_name:'家人 A',role:'owner',joined_at:created});
     if(member)db.members.push({family_id:FAMILY_A,user_id:B,display_name:'家人 B',role:'member',joined_at:created});
   }
-  if(twoFamilies) {db.families.push({id:FAMILY_B,name:'另一個小家',owner_id:A,created_at:created});db.members.push({family_id:FAMILY_B,user_id:A,display_name:'家人 A',role:'owner',joined_at:created});}
+  if(twoFamilies&&!sharedDb) {db.families.push({id:FAMILY_B,name:'另一個小家',owner_id:A,created_at:created});db.members.push({family_id:FAMILY_B,user_id:A,display_name:'家人 A',role:'owner',joined_at:created});}
   // Family tests exercise the real SDK and React flows, without painting the unrelated 3D scene.
   await page.route('**/src/world.js',route=>route.abort());
   const headers={'x-supabase-api-version':'2024-01-01','access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS'};
@@ -56,6 +56,34 @@ export async function installBackend(page,{families=false,member=false,twoFamili
     }
     if(url.pathname==='/rest/v1/island_family_invites')return reply(owner(familyId)?db.invites.filter(invite=>invite.family_id===familyId).map(({code,...invite})=>invite):[]);
     const rpc=url.pathname.split('/').at(-1);
+    if(rpc==='island_list_todos'||rpc==='island_change_todos') {
+      if(!membership(body.p_family_id))return reply({message:'family_access_denied',code:'42501'},403);
+      if(rpc==='island_change_todos') {
+        if(db.todoFailure)return reply({message:'network unavailable'},503);
+        const rows=db.todos.map(row=>({...row}));
+        for(const change of body.p_changes) {
+          const index=rows.findIndex(row=>row.id===change.id&&row.family_id===body.p_family_id);
+          if(change.version==null) {
+            const existing=rows.find(row=>row.id===change.id);
+            if(existing) {
+              if(existing.family_id===body.p_family_id&&existing.version===1&&existing.created_by===actor.id&&existing.text===change.text&&existing.due_date===change.date&&(existing.due_time||'')===(change.time||'')&&existing.done===change.done)continue;
+              return reply({message:'todo_conflict',code:'40001'},409);
+            }
+            rows.push({created_by:actor.id,id:change.id,family_id:body.p_family_id,text:change.text,due_date:change.date,due_time:change.time||null,done:change.done,created_at:new Date().toISOString(),version:1});
+          } else {
+            if(index<0||rows[index].version!==change.version)return reply({message:'todo_conflict',code:'40001'},409);
+            if(change.delete)rows.splice(index,1);
+            else rows[index]={...rows[index],text:change.text,due_date:change.date,due_time:change.time||null,done:change.done,version:change.version+1};
+          }
+        }
+        db.todos=rows;
+        if(db.todoResponseFailure){db.todoResponseFailure=false;return route.abort();}
+      }
+      const result=db.todos.filter(row=>row.family_id===body.p_family_id).map(row=>({...row}));
+      if(rpc==='island_list_todos'&&db.deferTodoList) {const wait=db.deferTodoList;db.deferTodoList=null;await wait;}
+      const offset=Number(url.searchParams.get('offset')||0),limit=Number(url.searchParams.get('limit')||1000);
+      return reply(result.slice(offset,offset+limit));
+    }
     if(rpc==='island_create_family') {
       const id=`cccccccc-cccc-4ccc-8ccc-${String(++db.sequence).padStart(12,'0')}`;
       db.families.push({id,name:body.p_name,owner_id:actor.id,created_at:created});

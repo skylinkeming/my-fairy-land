@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { dateString, today } from "../household.js";
 import { getUpcomingTodos, isInReminderWindow } from "../todo-reminders.js";
@@ -9,7 +9,8 @@ const prettyDate = (date) =>
     day: "numeric",
   });
 
-function TodoEditor({ todo, onSave, onCancel }) {
+function TodoEditor({ todo: current, onSave, onCancel }) {
+  const [todo] = useState(() => current);
   return (
     <form
       id="todo-edit-form"
@@ -29,12 +30,12 @@ function TodoEditor({ todo, onSave, onCancel }) {
     >
       <span className="section-kicker">EDIT YOUR LITTLE PLAN</span>
       <label htmlFor="edit-todo-text">編輯待辦內容</label>
-      <textarea
+      <input
+        type="text"
         id="edit-todo-text"
         name="text"
         required
         maxLength={160}
-        rows={2}
         defaultValue={todo.text}
         autoFocus
       />
@@ -76,7 +77,11 @@ function TodoEditor({ todo, onSave, onCancel }) {
     </form>
   );
 }
-export function TodosPanel({ household, commit, notify, upcoming = false }) {
+export function TodosPanel({ household, commit, notify, upcoming = false, shared = null }) {
+  const pendingCreate = useRef(null);
+  const detailRef = useRef(null);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(null);
   const [view, setView] = useState("list"),
     [scope, setScope] = useState(upcoming ? "upcoming" : "recent");
   const [editing, setEditing] = useState(null),
@@ -86,8 +91,11 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
     since = new Date(now);
   since.setHours(0, 0, 0, 0);
   since.setDate(since.getDate() - 13);
+  const keyword = query.normalize("NFKC").trim().toLocaleLowerCase();
+  const selectedTodo = todos.find(todo => todo.id === selected);
   const sorted = todos
     .filter((todo) =>
+      keyword ? todo.text.normalize("NFKC").toLocaleLowerCase().includes(keyword) :
       scope === "upcoming"
         ? isInReminderWindow(todo, new Date(now))
         : todo.created >= since.getTime() && todo.created <= now,
@@ -102,9 +110,12 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
       : todos.filter((todo) => todo.date.startsWith(monthKey));
   const completed = visible.filter((todo) => todo.done),
     pending = visible.filter((todo) => !todo.done).length;
-  const change = (next) => commit({ ...household, todos: next });
-  const remove = (id) => {
-    if (change(todos.filter((todo) => todo.id !== id))) setEditing(null);
+  const change = (next) => shared ? shared.save(next) : commit({ ...household, todos: next });
+  const remove = async (id) => {
+    if (await change(todos.filter((todo) => todo.id !== id))) {
+      setEditing(null);
+      if (selected === id) setSelected(null);
+    }
   };
   const toggle = (id) =>
     change(
@@ -114,16 +125,21 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
     );
   const stopEditing = () => {
     setEditing(null);
-    document.querySelector(".island-panel")?.focus();
+    if (view === "calendar") detailRef.current?.focus({preventScroll:true});
+    else document.querySelector(".island-panel")?.focus();
   };
   const editForm = (todo) => (
     <TodoEditor
       key={todo.id}
       todo={todo}
       onCancel={stopEditing}
-      onSave={(updated) => {
+      onSave={async (updated) => {
+        if (!todos.some(todo => todo.id === updated.id)) {
+          notify("這件待辦已被家人刪除，請取消編輯後確認最新清單。草稿仍保留在表單中。");
+          return;
+        }
         if (
-          change(todos.map((todo) => (todo.id === updated.id ? updated : todo)))
+          await change(todos.map((todo) => (todo.id === updated.id ? updated : todo)))
         ) {
           stopEditing();
           notify("待辦已更新，提醒熱氣球也會一起調整。");
@@ -132,7 +148,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
     />
   );
   function row(todo) {
-    if (editing === todo.id) return editForm(todo);
+    if (editing?.id === todo.id) return null;
     return (
       <div key={todo.id} className={`todo-row ${todo.done ? "done" : ""}`}>
         <label className="todo-check">
@@ -152,7 +168,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
           data-edit-todo={todo.id}
           aria-label={`編輯 ${todo.text}`}
           title="點選編輯待辦"
-          onClick={() => setEditing(todo.id)}
+          onClick={() => setEditing(todo)}
         >
           {todo.text}
           <svg
@@ -189,6 +205,14 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
       </div>
     );
   }
+  const selectTodo = (todo) => {
+    setSelected(todo.id);
+    setEditing(null);
+    requestAnimationFrame(() => {
+      detailRef.current?.focus({preventScroll:true});
+      detailRef.current?.scrollIntoView({block:"nearest"});
+    });
+  };
   function calendar() {
     const year = month.getFullYear(),
       m = month.getMonth(),
@@ -200,7 +224,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
           <button
             className="round-button"
             aria-label="上一個月"
-            onClick={() => setMonth(new Date(year, m - 1, 1))}
+            onClick={() => {setMonth(new Date(year, m - 1, 1));setSelected(null);setEditing(null);}}
           >
             ‹
           </button>
@@ -210,7 +234,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
           <button
             className="round-button"
             aria-label="下一個月"
-            onClick={() => setMonth(new Date(year, m + 1, 1))}
+            onClick={() => {setMonth(new Date(year, m + 1, 1));setSelected(null);setEditing(null);}}
           >
             ›
           </button>
@@ -252,9 +276,10 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
                         </label>
                         <button
                           className="calendar-task-text"
-                          data-edit-todo={todo.id}
-                          aria-label={`編輯 ${todo.text}`}
-                          onClick={() => setEditing(todo.id)}
+                          data-view-todo={todo.id}
+                          aria-label={`查看 ${todo.text}`}
+                          aria-pressed={selected === todo.id}
+                          onClick={() => selectTodo(todo)}
                         >
                           {todo.time && (
                             <>
@@ -284,6 +309,13 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
   }
   return (
     <>
+      {shared && <div className="todo-sync" role="status">
+        <p>{shared.busy ? "正在儲存家庭待辦…" : !shared.ready ? "正在載入家庭待辦…" : "家庭共享待辦 · 每 10 秒及回到頁面時同步"}</p>
+        {shared.legacyCount > 0 && <p>此瀏覽器另有 {shared.legacyCount} 件舊待辦，仍保留於本機，尚未分享到家庭。</p>}
+        {shared.error && <p role="alert">{shared.error}</p>}
+        <button type="button" className="secondary-button" onClick={shared.refresh} disabled={shared.busy}>重新同步</button>
+      </div>}
+      <fieldset className="todo-controls" disabled={Boolean(shared && (!shared.ready || shared.busy))}>
       <div className="panel-toolbar">
         <span className="small-muted">
           {pending
@@ -296,6 +328,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
             className={view === "list" ? "active" : ""}
             onClick={() => {
               setView("list");
+              setSelected(null);
               setEditing(null);
             }}
           >
@@ -306,6 +339,8 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
             className={view === "calendar" ? "active" : ""}
             onClick={() => {
               setView("calendar");
+              setQuery("");
+              setSelected(null);
               setEditing(null);
             }}
           >
@@ -313,6 +348,15 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
             日曆
           </button>
         </div>
+      </div>
+      <div className="todo-search">
+        <label htmlFor="todo-search">搜尋所有待辦</label>
+        <div className="todo-search-field">
+          <input id="todo-search" type="search" value={query} placeholder="輸入關鍵字，查找過去與已完成的待辦"
+            onChange={event=>{setQuery(event.target.value);setView("list");setEditing(null);setSelected(null);}} />
+          {query && <button type="button" className="secondary-button" onClick={()=>setQuery("")}>清除搜尋</button>}
+        </div>
+        {keyword && <p role="status">全部歷史待辦中找到 {sorted.length} 件符合「{query.trim()}」的事項（含已完成）</p>}
       </div>
       <div className="todo-scope-switch">
         {[
@@ -325,7 +369,9 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
             className={scope === value ? "active" : ""}
             onClick={() => {
               setScope(value);
+              setQuery("");
               setView("list");
+              setSelected(null);
               setEditing(null);
             }}
           >
@@ -336,17 +382,17 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
       <form
         id="todo-form"
         className="add-todo"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
           const form = event.currentTarget,
             data = new FormData(form),
             text = data.get("text").trim();
           if (!text) return;
           if (
-            change([
+            await change([
               ...todos,
               {
-                id: crypto.randomUUID(),
+                id: (pendingCreate.current ||= crypto.randomUUID()),
                 text,
                 date: data.get("date"),
                 time: data.get("time"),
@@ -355,6 +401,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
               },
             ])
           ) {
+            pendingCreate.current = null;
             form.reset();
             notify("又多了一件值得期待的小事 ♡");
           }
@@ -397,16 +444,16 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
       <div className="todo-list-tools">
         <p className="todo-range small-muted">
           {view === "list"
-            ? scope === "upcoming"
+            ? keyword ? "搜尋全部歷史待辦 · 點選文字可編輯" : scope === "upcoming"
               ? "今天與24小時內的待辦 · 點選文字可編輯"
               : "近兩週新增的待辦 · 點選文字可編輯"
-            : "依預定日期查看所有待辦"}
+            : "依預定日期查看所有待辦 · 點選文字查看詳情"}
         </p>
         <button
           id="delete-completed"
           className="delete-completed"
           disabled={!completed.length}
-          onClick={() => {
+          onClick={async () => {
             if (
               !confirm(
                 `要刪除目前檢視中的 ${completed.length} 件已完成待辦嗎？`,
@@ -414,7 +461,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
             )
               return;
             const ids = new Set(completed.map((todo) => todo.id));
-            if (change(todos.filter((todo) => !ids.has(todo.id)))) {
+            if (await change(todos.filter((todo) => !ids.has(todo.id)))) {
               setEditing(null);
               notify(`已刪除 ${ids.size} 件已完成待辦。`);
             }
@@ -425,12 +472,23 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
         </button>
       </div>
       <div id="todo-list">
-        {view === "calendar" &&
-          editing &&
-          todos.find((todo) => todo.id === editing) &&
-          editForm(todos.find((todo) => todo.id === editing))}
+        {view === "list" && editing && editForm(editing)}
         {view === "calendar" ? (
-          calendar()
+          <>
+            {calendar()}
+            {selected && <section ref={detailRef} className="todo-detail" id="todo-detail" tabIndex={-1} aria-label="待辦詳情">
+              <h3>待辦詳情</h3>
+              {editing ? editForm(editing) : selectedTodo ? <>
+                <dl>
+                  <dt>內容</dt><dd className="todo-detail-text">{selectedTodo.text}</dd>
+                  <dt>預定日期</dt><dd>{selectedTodo.date}</dd>
+                  <dt>時間</dt><dd>{selectedTodo.time || "未設定"}</dd>
+                  <dt>狀態</dt><dd>{selectedTodo.done ? "已完成" : "未完成"}</dd>
+                </dl>
+                <button type="button" className="primary-button" onClick={()=>setEditing(selectedTodo)}>編輯</button>
+              </> : <p role="status">這件待辦已被刪除。</p>}
+            </section>}
+          </>
         ) : (
           <div className="todo-list">
             {sorted.length ? (
@@ -439,16 +497,17 @@ export function TodosPanel({ household, commit, notify, upcoming = false }) {
               <div className="empty-state">
                 ✿
                 <h3>
-                  {scope === "upcoming"
+                  {keyword ? "找不到符合的待辦" : scope === "upcoming"
                     ? "今天可以慢慢來，暫時沒有待辦"
                     : "近兩週還沒有新增待辦"}
                 </h3>
-                <p>新增想一起做的小事，或切換日曆查看其他日期。</p>
+                <p>{keyword ? "試試其他關鍵字，或清除搜尋查看最近的待辦。" : "新增想一起做的小事，或切換日曆查看其他日期。"}</p>
               </div>
             )}
           </div>
         )}
       </div>
+      </fieldset>
     </>
   );
 }

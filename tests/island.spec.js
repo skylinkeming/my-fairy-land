@@ -611,12 +611,14 @@ test("reminder balloon opens due items regardless of creation age and disappears
   await expect(page.locator("#todo-reminder")).toBeHidden();
 });
 
-test("calendar task text can be edited while the checkboxes remain independent", async ({
+test("calendar details require an explicit edit action while checkboxes remain independent", async ({
   page,
 }) => {
   await page.locator('.island-card[data-open="todo"]').click();
   await page.getByRole("button", { name: "日曆", exact: true }).click();
   await page.locator(".calendar-task-text").first().click();
+  await expect(page.locator("#todo-detail input")).toHaveCount(0);
+  await page.locator("#todo-detail").getByRole("button", {name:"編輯", exact:true}).click();
   await page.locator("#edit-todo-text").fill("從日曆編輯的待辦");
   await page.getByRole("button", { name: "儲存修改", exact: true }).click();
   await expect(

@@ -78,7 +78,7 @@ export function useFamilyWorkspace() {
   const visibleDetails=details.userId===userId && details.familyId===activeFamily?.id?details:{members:[],invites:[],loading:Boolean(activeFamily),error:null};
   return {
     configured:Boolean(backendConfig),ready:auth.ready&&(!userId||(workspace.userId===userId&&workspace.settled)),
-    user,activeFamily,families,
+    client,user,activeFamily,families,
     ...visibleDetails,loading:workspace.loading||visibleDetails.loading,
     error:auth.error||(workspace.userId===userId?workspace.error:null)||visibleDetails.error,
     refresh,

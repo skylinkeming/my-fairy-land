@@ -67,7 +67,7 @@ export function FamilyPanel({workspace,onClose}) {
           {!family||familyMode!=='dashboard'?<>{!family&&<p className="family-intro">先建立一個家庭，或貼上家人分享的邀請碼。</p>}{membershipForms()}</>:
           <>
             <section className="family-section"><div className="family-section-title"><h3>{family.name}</h3><span className="family-role">{owner?'家庭建立者':'家庭成員'}</span></div>
-              <p className="family-scope-note">家庭名單可跨裝置使用。待辦、記事與照片目前仍保存在各自的裝置，尚未啟用家庭共享。</p>
+              <p className="family-scope-note">家庭名單與待辦可跨裝置使用，同一家庭的成員可共同查看及更新待辦。記事、照片與造型仍保存在各自的瀏覽器。</p>
               <h4>家庭成員</h4>{workspace.loading?<p role="status">正在載入成員…</p>:<ul className="family-members">{workspace.members.map(member=><li key={member.user_id}><span className="family-avatar" aria-hidden="true">{member.display_name.slice(0,1)}</span><div><strong>{member.display_name}{member.user_id===workspace.user.id?'（你）':''}</strong><small>{member.role==='owner'?'建立者':'家人'}</small></div>{owner&&member.role!=='owner'&&<button className="family-text-button" disabled={Boolean(busy)} onClick={()=>setConfirmation({kind:'remove',member})}>移除</button>}</li>)}</ul>}
             </section>
             {owner&&<section className="family-section"><h3>邀請家人</h3><p>每組邀請碼只能使用一次，7 天內有效。請複製後自行分享給家人。</p><button className="primary-button" disabled={Boolean(busy)} onClick={()=>run('invite',()=>workspace.createInvite(),value=>setInvitation(value))}>{busy==='invite'?'產生中…':'產生邀請碼'}</button>

@@ -1,6 +1,7 @@
 import {FamilyPanel} from './ui/FamilyPanel.jsx';
 import {useFamilyWorkspace} from './family/useFamilyWorkspace.js';
 import {familyScope} from './family/api.js';
+import {useFamilyTodos} from './family/useFamilyTodos.js';
 import React, {
   lazy,
   Suspense,
@@ -77,7 +78,7 @@ function useSound(notify) {
   }
   return { playing, toggle };
 }
-function IslandModal({ panel, photoOpen, onClose, children }) {
+function IslandModal({ panel, photoOpen, onClose, children, sharedTodos }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
     if (panel) ref.current?.focus();
@@ -153,7 +154,7 @@ function IslandModal({ panel, photoOpen, onClose, children }) {
         <div id="panel-content">{children}</div>
         <div className="panel-footer">
           <Icon name="leaf" /> 小小的日常，好好收藏{" "}
-          <span>資料儲存在這個瀏覽器</span>
+          <span>{sharedTodos ? "待辦與同一家庭共享；記事與照片儲存在這個瀏覽器" : "資料儲存在這個瀏覽器"}</span>
         </div>
       </section>
     </div>
@@ -171,7 +172,7 @@ export default function App() {
   </>;
 }
 function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
-  const [household, setHousehold] = useState(()=>loadHousehold(scope.storageKey)),
+  const [localHousehold, setHousehold] = useState(()=>loadHousehold(scope.storageKey)),
     [panel, setPanel] = useState(null),
     [photo, setPhoto] = useState(null);
   const [expanded, setExpanded] = useState(false),
@@ -190,6 +191,9 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
         return {};
       }
     });
+  const shared=Boolean(workspace.user && workspace.activeFamily);
+  const familyTodos=useFamilyTodos(workspace.client,workspace.activeFamily?.id);
+  const household=shared?{...localHousehold,todos:familyTodos.todos}:localHousehold;
   const worldRef = useRef(null),
     residents = useRef(household.residents),
     returnFocus = useRef(null),
@@ -203,15 +207,16 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
     (next) => {
       if(!scope.editable){onFamilyOpen();notify("先建立或加入家庭，再記下你們的日常。");return false;}
       try {
-        localStorage.setItem(scope.storageKey, JSON.stringify(next));
-        setHousehold(next);
+        const local=shared?{...next,todos:localHousehold.todos}:next;
+        localStorage.setItem(scope.storageKey, JSON.stringify(local));
+        setHousehold(local);
         return true;
       } catch {
         notify("儲存空間不足，請刪除一些照片後再試一次。");
         return false;
       }
     },
-    [notify,scope.storageKey,scope.editable,onFamilyOpen],
+    [notify,scope.storageKey,scope.editable,onFamilyOpen,shared,localHousehold.todos],
   );
   useEffect(() => {worldRef.current?.setInteriorsVisible(interiors);}, [interiors,ready]);
   useEffect(() => {
@@ -361,7 +366,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
         </button>
       </header>
       <main>
-        {workspace.user&&<div className="family-context"><strong>{workspace.activeFamily?.name||"尚未加入家庭"}</strong><span>{workspace.activeFamily?"家庭名單已同步，日常內容尚未共享。":"建立或加入家庭，開始一起生活。"}</span><button onClick={onFamilyOpen}>家庭空間</button></div>}
+        {workspace.user&&<div className="family-context"><strong>{workspace.activeFamily?.name||"尚未加入家庭"}</strong><span>{workspace.activeFamily?"待辦與家人共享；記事、照片與造型仍保存在此瀏覽器。":"建立或加入家庭，開始一起生活。"}</span><button onClick={onFamilyOpen}>家庭空間</button></div>}
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-copy">
             <div className="eyebrow">
@@ -606,6 +611,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
         panel={panel}
         photoOpen={Boolean(photo)}
         onClose={closePanel}
+        sharedTodos={shared}
       >
         {panel?.id === "todo" && (
           <TodosPanel
@@ -614,6 +620,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
             commit={commit}
             notify={notify}
             upcoming={panel.upcoming}
+            shared={shared ? {...familyTodos,legacyCount:localHousehold.todos.length} : null}
           />
         )}
         {panel?.id === "note" && (

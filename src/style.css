@@ -3551,3 +3551,21 @@ body.family-open {overflow:hidden;}
 .family-login-note {font-size:13px;color:#8a785b;}
 
 .family-panel .family-google-button:disabled {cursor:default;box-shadow:none;}
+
+.todo-controls { border: 0; margin: 0; padding: 0; min-width: 0; }
+.todo-sync { margin-bottom: 1rem; padding: .8rem 1rem; border-radius: 12px; background: #f3f7ed; color: #4d6551; }
+.todo-sync p { margin: 0 0 .5rem; }
+.todo-sync [role="alert"] { color: #984a3b; }
+
+.todo-search { margin: 1rem 0; }
+.todo-search > label { display: block; margin-bottom: .5rem; font-weight: 600; }
+.todo-search-field { display: flex; gap: .5rem; flex-wrap: wrap; }
+.todo-search-field input { flex: 1; min-width: 0; width: 100%; }
+.todo-search p { font-size: .85rem; color: #596853; overflow-wrap: anywhere; }
+.todo-detail { margin-top: 1.2rem; padding: 1rem; border: 1px solid #d9e1d0; border-radius: 14px; background: #fafbf6; }
+.todo-detail h3 { margin-top: 0; }
+.todo-detail dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .65rem 1rem; }
+.todo-detail dt { color: #6c765f; }
+.todo-detail dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.todo-edit-row > input { width: 100%; min-width: 0; }
+.calendar-task-text[aria-pressed="true"] { background: #e0ebd6; border-radius: 4px; }

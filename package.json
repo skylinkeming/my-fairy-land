@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "npm run test:unit && playwright test",
-    "test:unit": "node unit/resident-life.test.js && node unit/todo-reminders.test.js && node unit/resident-shape.test.js && node unit/resident-navigation.test.js && node unit/building-visits.test.js && node unit/resident-greetings.test.js && node unit/family-config.test.js"
+    "test:unit": "node unit/resident-life.test.js && node unit/todo-reminders.test.js && node unit/resident-shape.test.js && node unit/resident-navigation.test.js && node unit/building-visits.test.js && node unit/resident-greetings.test.js && node unit/family-config.test.js && node unit/family-todos.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
