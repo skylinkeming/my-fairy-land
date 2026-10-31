@@ -17,6 +17,8 @@ export default function ResidentEditor({
   onChange,
   onClose,
   worldRef,
+  cloud = null,
+  localBackup = {},
 }) {
   const [selected, setSelected] = useState(initialIndex),
     [draft, setDraft] = useState(() =>
@@ -25,6 +27,8 @@ export default function ResidentEditor({
   const [status, setStatus] = useState(
     "拖曳娃娃旋轉，滾輪或雙指縮放；調好後按「儲存並套用」。",
   );
+  const [saving,setSaving]=useState(false);
+  const savingRef=useRef(false),modified=useRef(false),baseVersions=useRef({...cloud?.versions});
   const overlay = useRef(null),
     canvas = useRef(null),
     preview = useRef(null),
@@ -39,6 +43,7 @@ export default function ResidentEditor({
     JSON.stringify(normalizeShape(settings[RESIDENT_SHAPE_IDS[selected]]));
   const closeRef = useRef(null);
   closeRef.current = () => {
+    if(savingRef.current)return;
     if (!dirty || confirm("還有未儲存的造型，確定要放棄這次調整嗎？"))
       onClose();
   };
@@ -101,7 +106,15 @@ export default function ResidentEditor({
   useEffect(() => {
     preview.current?.setShape(draft);
   }, [draft]);
+  useEffect(()=>{
+    if(!modified.current && !savingRef.current) {
+      setDraft(normalizeShape(settings[RESIDENT_SHAPE_IDS[selected]]));
+      baseVersions.current={...cloud?.versions};
+    }
+  },[settings,selected,cloud?.ready]);
   function select(index, nextSettings = settings) {
+    modified.current=false;
+    baseVersions.current={...cloud?.versions};
     const shape = normalizeShape(nextSettings[RESIDENT_SHAPE_IDS[index]]);
     setSelected(index);
     setDraft(shape);
@@ -113,25 +126,40 @@ export default function ResidentEditor({
     shell.current.scrollTop = 0;
     setStatus("拖曳娃娃旋轉，滾輪或雙指縮放；調好後按「儲存並套用」。");
   }
-  function persist(next) {
-    localStorage.setItem(storageKey, serializeShapeSettings(next));
-    onChange(next);
-  }
-  function save() {
-    try {
-      persist({
-        ...settings,
-        [RESIDENT_SHAPE_IDS[selected]]: normalizeShape(draft),
-      });
-      setStatus("已儲存並套用！重新開啟網站也會保留。");
-    } catch {
-      setStatus("無法儲存，請確認瀏覽器允許儲存網站資料；可先匯出設定備份。");
+  async function persist(next,changes,versions=baseVersions.current) {
+    if(cloud) {
+      const saved=await cloud.save(changes,versions);
+      try {localStorage.setItem(storageKey,serializeShapeSettings(saved.settings));}catch { /* Cloud storage is authoritative. */ }
+      onChange(saved.settings);baseVersions.current={...saved.versions};
+      return saved.settings;
     }
+    localStorage.setItem(storageKey, serializeShapeSettings(next));
+    onChange(next);return next;
   }
-  function exportSettings() {
+  async function save() {
+    if(savingRef.current)return;
+    savingRef.current=true;setSaving(true);
+    try {
+      const id=RESIDENT_SHAPE_IDS[selected],shape=normalizeShape(draft);
+      await persist({...settings,[id]:shape},{[id]:shape});
+      modified.current=false;
+      setStatus(cloud?"已儲存並套用到家庭資料庫！重開網站或換裝置也會載入。":"已儲存並套用！重新開啟網站也會保留。");
+    } catch(error) {
+      setStatus(cloud?error.message:"無法儲存，請確認瀏覽器允許儲存網站資料；可先匯出設定備份。");
+    } finally {savingRef.current=false;setSaving(false);}
+  }
+  async function uploadLocalBackup() {
+    if(savingRef.current||!confirm("要將這個裝置的舊造型存入目前家庭嗎？將覆蓋對應娃娃的家庭造型。"))return;
+    savingRef.current=true;setSaving(true);
+    try {
+      const next=await persist({...settings,...localBackup},localBackup,{...cloud?.versions});
+      modified.current=false;select(selected,next);setStatus("已將本機造型存入家庭資料庫。");
+    }catch(error){setStatus(error.message);}finally{savingRef.current=false;setSaving(false);}
+  }
+  function exportSettings(backupOnly=false) {
     const blob = new Blob(
       [
-        serializeShapeSettings({
+        serializeShapeSettings(backupOnly ? localBackup : {
           ...settings,
           [RESIDENT_SHAPE_IDS[selected]]: draft,
         }),
@@ -146,12 +174,13 @@ export default function ResidentEditor({
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setStatus("已匯出全部設定（包含目前預覽），可備份或交給我套用到網站。");
+    setStatus(backupOnly?"已匯出此裝置的舊造型備份。":"已匯出全部設定（包含目前預覽），可備份或交給我套用到網站。");
   }
   async function importSettings(event) {
     const input = event.currentTarget,
       selectedFile = input.files[0];
-    if (!selectedFile) return;
+    if (!selectedFile || savingRef.current) return;
+    let importing=false;
     try {
       if (selectedFile.size > 100000)
         throw new Error("設定檔太大，請選擇角色編輯器匯出的 JSON。");
@@ -159,9 +188,10 @@ export default function ResidentEditor({
       if (!Object.keys(imported).length)
         throw new Error("設定檔沒有可用的娃娃造型。");
       if (!confirm("匯入將覆蓋檔案中娃娃的已存造型，確定要套用嗎？")) return;
-      const next = { ...settings, ...imported };
-      persist(next);
-      select(selected, next);
+      if(savingRef.current)return;
+      importing=true;savingRef.current=true;setSaving(true);
+      const next = await persist({ ...settings, ...imported },imported,{...cloud?.versions});
+      modified.current=false;select(selected, next);
       setStatus("已匯入並套用設定。");
     } catch (error) {
       setStatus(
@@ -170,6 +200,7 @@ export default function ResidentEditor({
           : error.message,
       );
     } finally {
+      if(importing){savingRef.current=false;setSaving(false);}
       input.value = "";
     }
   }
@@ -192,6 +223,7 @@ export default function ResidentEditor({
             type="button"
             data-editor-close
             aria-label="關閉造型編輯器"
+            disabled={saving}
             onClick={() => closeRef.current()}
           >
             關閉 ✕
@@ -224,6 +256,12 @@ export default function ResidentEditor({
             <p>拖曳旋轉 · 滾輪／雙指縮放</p>
           </div>
           <div ref={tools} className="resident-editor-tools">
+            {cloud && <div className="shape-sync" role="status">
+              <p>{saving?"正在儲存家庭造型…":cloud.ready?"家庭造型已載入 · 每 10 秒同步":"正在載入家庭造型…"}</p>
+              {cloud.error && <p role="alert">{cloud.error}</p>}
+              <button type="button" onClick={cloud.refresh} disabled={saving}>重新載入家庭造型</button>
+            </div>}
+            <fieldset className="shape-controls" disabled={saving || Boolean(cloud&&!cloud.ready)}>
             <label className="resident-editor-picker">
               選擇娃娃
               <select
@@ -261,6 +299,7 @@ export default function ResidentEditor({
                     value={draft[key]}
                     onChange={(event) => {
                       const value = Number(event.target.value);
+                      modified.current=true;
                       setDraft((previous) => ({ ...previous, [key]: value }));
                       setStatus(
                         "預覽已更新，按「儲存並套用」才會更新島上的娃娃。",
@@ -283,7 +322,7 @@ export default function ResidentEditor({
                 type="button"
                 data-reset
                 onClick={() => {
-                  setDraft(normalizeShape());
+                  modified.current=true;setDraft(normalizeShape());
                   setStatus("已預覽原始造型；按「儲存並套用」後生效。");
                 }}
               >
@@ -292,7 +331,7 @@ export default function ResidentEditor({
               <button type="button" data-undo onClick={() => select(selected)}>
                 還原未儲存調整
               </button>
-              <button type="button" data-export onClick={exportSettings}>
+              <button type="button" data-export onClick={()=>exportSettings()}>
                 匯出全部設定
               </button>
               <button
@@ -302,6 +341,7 @@ export default function ResidentEditor({
               >
                 匯入設定
               </button>
+              {cloud && Object.keys(localBackup).length>0 && <button type="button" onClick={uploadLocalBackup}>將此裝置舊造型存入家庭</button>}
               <input
                 ref={file}
                 type="file"
@@ -310,9 +350,10 @@ export default function ResidentEditor({
                 onChange={importSettings}
               />
             </div>
+            </fieldset>
+            {cloud && !cloud.ready && <button type="button" onClick={()=>exportSettings(true)}>匯出本機造型備份</button>}
             <p className="resident-editor-note">
-              設定儲存在此瀏覽器，會套用到島上的 3D
-              娃娃。可匯出備份，或把設定檔交給我套用到網站。家人朋友卡片的平面插圖維持原樣。
+              {cloud?"設定存入目前家庭的資料庫，家人及其他裝置會載入相同造型。":"訪客造型儲存在此瀏覽器；登入家庭後可將本機造型存入資料庫。"}可匯出備份。家人朋友卡片的平面插圖維持原樣。
             </p>
             <p data-editor-status role="status" aria-live="polite">
               {status}

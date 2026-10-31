@@ -1,3 +1,4 @@
+import {normalizeShape} from '../../src/resident-shape.js';
 import {familyDisplayName} from '../../src/family/auth.js';
 const backends=new WeakMap();
 const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',C='33333333-3333-4333-8333-333333333333';
@@ -13,7 +14,7 @@ export function session(user) {
 }
 export async function installBackend(page,{families=false,member=false,twoFamilies=false,sharedDb=null}={}) {
   const created=new Date().toISOString();
-  const db=sharedDb||{families:[],members:[],invites:[],todos:[],sequence:0,requests:[],nextGoogleEmail:'a@example.test',oauthFailure:null,oauthTokenFailure:false};
+  const db=sharedDb||{families:[],members:[],invites:[],todos:[],shapes:[],sequence:0,requests:[],nextGoogleEmail:'a@example.test',oauthFailure:null,oauthTokenFailure:false};
   backends.set(page,db);
   if(families&&!sharedDb) {
     db.families.push({id:FAMILY_A,name:'溫暖的小家',owner_id:A,created_at:created});
@@ -56,6 +57,24 @@ export async function installBackend(page,{families=false,member=false,twoFamili
     }
     if(url.pathname==='/rest/v1/island_family_invites')return reply(owner(familyId)?db.invites.filter(invite=>invite.family_id===familyId).map(({code,...invite})=>invite):[]);
     const rpc=url.pathname.split('/').at(-1);
+    if(rpc==='island_list_resident_shapes'||rpc==='island_save_resident_shapes') {
+      if(db.shapesMissing)return reply({message:'function not found in the schema cache',code:'PGRST202'},404);
+      if(!membership(body.p_family_id))return reply({message:'family_access_denied',code:'42501'},403);
+      if(rpc==='island_save_resident_shapes') {
+        if(db.shapeFailure)return reply({message:'network unavailable'},503);
+        const rows=db.shapes.map(row=>({...row,shape:{...row.shape}}));
+        for(const change of body.p_changes) {
+          const index=rows.findIndex(row=>row.family_id===body.p_family_id&&row.resident_id===change.resident_id);
+          if((index<0&&change.version!=null)||(index>=0&&rows[index].version!==change.version))return reply({message:'shape_conflict',code:'40001'},409);
+          const row={family_id:body.p_family_id,resident_id:change.resident_id,shape:normalizeShape(change.shape),version:index<0?1:rows[index].version+1,updated_by:actor.id,updated_at:new Date().toISOString()};
+          if(index<0)rows.push(row);else rows[index]=row;
+        }
+        db.shapes=rows;
+      }
+      const result=db.shapes.filter(row=>row.family_id===body.p_family_id).map(row=>({...row,shape:{...row.shape}}));
+      if(rpc==='island_list_resident_shapes'&&db.deferShapes){const wait=db.deferShapes;db.deferShapes=null;await wait;}
+      return reply(result);
+    }
     if(rpc==='island_list_todos'||rpc==='island_change_todos') {
       if(!membership(body.p_family_id))return reply({message:'family_access_denied',code:'42501'},403);
       if(rpc==='island_change_todos') {

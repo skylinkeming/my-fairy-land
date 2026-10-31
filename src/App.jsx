@@ -2,12 +2,14 @@ import {FamilyPanel} from './ui/FamilyPanel.jsx';
 import {useFamilyWorkspace} from './family/useFamilyWorkspace.js';
 import {familyScope} from './family/api.js';
 import {useFamilyTodos} from './family/useFamilyTodos.js';
+import {useFamilyShapes} from './family/useFamilyShapes.js';
 import React, {
   lazy,
   Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -183,7 +185,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
     [toast, setToast] = useState(null),
     [clock, setClock] = useState(Date.now());
   const [editor, setEditor] = useState(null),
-    [shapes, setShapes] = useState(() => {
+    [localShapes, setLocalShapes] = useState(() => {
       try {
         const value = localStorage.getItem(scope.shapesKey);
         return value ? parseShapeSettings(value) : {};
@@ -193,6 +195,12 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
     });
   const shared=Boolean(workspace.user && workspace.activeFamily);
   const familyTodos=useFamilyTodos(workspace.client,workspace.activeFamily?.id);
+  const familyShapes=useFamilyShapes(workspace.client,workspace.activeFamily?.id);
+  const shapes=useMemo(()=>shared?{...localShapes,...familyShapes.settings}:localShapes,[shared,localShapes,familyShapes.settings]);
+  const [shapeBackup]=useState(()=>{
+    if(Object.keys(localShapes).length)return localShapes;
+    try {const value=localStorage.getItem('little-island-shapes-v1');return value?parseShapeSettings(value):{};}catch{return {};}
+  });
   const household=shared?{...localHousehold,todos:familyTodos.todos}:localHousehold;
   const worldRef = useRef(null),
     residents = useRef(household.residents),
@@ -203,6 +211,10 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
     (text) => setToast({ id: ++toastId.current, text }),
     [],
   );
+  const editShape=useCallback(index=>{
+    if(!scope.editable){onFamilyOpen();notify("請先建立或加入家庭，再儲存家庭娃娃造型。");return;}
+    setEditor(index);
+  },[scope.editable,onFamilyOpen,notify]);
   const commit = useCallback(
     (next) => {
       if(!scope.editable){onFamilyOpen();notify("先建立或加入家庭，再記下你們的日常。");return false;}
@@ -366,7 +378,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
         </button>
       </header>
       <main>
-        {workspace.user&&<div className="family-context"><strong>{workspace.activeFamily?.name||"尚未加入家庭"}</strong><span>{workspace.activeFamily?"待辦與家人共享；記事、照片與造型仍保存在此瀏覽器。":"建立或加入家庭，開始一起生活。"}</span><button onClick={onFamilyOpen}>家庭空間</button></div>}
+        {workspace.user&&<div className="family-context"><strong>{workspace.activeFamily?.name||"尚未加入家庭"}</strong><span>{workspace.activeFamily?"待辦與娃娃造型和家人共享；記事與照片仍保存在此瀏覽器。":"建立或加入家庭，開始一起生活。"}</span><button onClick={onFamilyOpen}>家庭空間</button></div>}
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-copy">
             <div className="eyebrow">
@@ -445,7 +457,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
               onVisit={onVisit}
               onMode={onMode}
               onReady={onReady}
-              onEdit={setEditor}
+              onEdit={editShape}
               shapes={shapes}
               suspended={Boolean(panel) || editor !== null || familyOpen}
             />
@@ -657,7 +669,9 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
             residents={household.residents}
             settings={shapes}
             storageKey={scope.shapesKey}
-            onChange={setShapes}
+            onChange={setLocalShapes}
+            cloud={shared?familyShapes:null}
+            localBackup={shapeBackup}
             onClose={() => setEditor(null)}
             worldRef={worldRef}
           />

@@ -20,7 +20,9 @@ try {
   must(psql(migration));
   must(psql(readFileSync(new URL('../tests/backend/family-rls.sql',import.meta.url),'utf8')));
   must(psql(readFileSync(new URL('../tests/backend/todos-rls.sql',import.meta.url),'utf8')));
+  must(psql(readFileSync(new URL('../tests/backend/shapes-rls.sql',import.meta.url),'utf8')));
   must(psql(migration)); // Rerunning setup must preserve families and memberships.
+  if(must(psql("select count(*) from public.island_resident_shapes where resident_id='guagua' and shape->>'bodyWidth'='1.2' and version=2;")).trim()!=='1')throw new Error('Migration rerun lost resident settings.');
   const setup=must(psql(`${identity('11111111-1111-4111-8111-111111111111')}
     select public.island_create_family('Concurrent family') as family_id \\gset
     select json_build_object('family',:'family_id','invite',public.island_create_invite(:'family_id'));`));
@@ -47,5 +49,5 @@ try {
   if(edits.filter(result=>result.code===0).length!==1||!edits.some(result=>result.stderr.includes('todo_conflict')))throw new Error('Concurrent todo edits did not enforce version conflicts.');
   must(psql(migration));
   if(must(psql(`select version from public.island_todos where id='${todoId}';`)).trim()!=='2')throw new Error('Migration rerun changed shared todo data.');
-  console.log('PostgreSQL checks passed: family isolation, server-side roles, hashed/expired/revoked invitations, immediate revocation, migration rerun, concurrent one-use joins, shared todo CRUD/RLS, atomic conflict rollback, concurrent todo edits and todo migration rerun.');
+  console.log('PostgreSQL checks passed: family isolation, server-side roles, hashed/expired/revoked invitations, immediate revocation, migration rerun, concurrent one-use joins, shared todo CRUD/RLS, atomic conflict rollback, concurrent todo edits, todo migration rerun, resident shape validation/RLS/conflicts and shape migration rerun.');
 } finally {command(['rm','-f',container]);}

@@ -3578,3 +3578,7 @@ body.family-open {overflow:hidden;}
 }
 .todo-detail-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
 .calendar-export-note { line-height: 1.7; }
+
+.shape-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+.shape-sync { padding: .6rem 0; font-size: .85rem; }
+.shape-sync [role="alert"] { color: #984a3b; }
