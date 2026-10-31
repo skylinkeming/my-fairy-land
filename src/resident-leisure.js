@@ -29,7 +29,7 @@ export function createLeisureSites({nodes,navigation,crossings=[],allow=()=>true
 
 export function createLeisureController({actors,navigation,sites,random,start,finish,isPaused,automatic=true}) {
   const reservations=new Map();
-  let elapsed=0,nextAutomatic=8,kindIndex=0,photo=null;
+  let elapsed=0,nextAutomatic=8,kindIndex=0,photo=null,initialized=false,initializing=false;
   const kinds=Object.keys(states);
   const origin=actor=>navigation.walkable(actor)?actor:actor.target?.approach||actor;
   const available=actor=>!isPaused(actor.id)&&!actor.target?.leisureSite&&!actor.target?.roomId&&!actor.target?.leavingRoom&&actor.partner==null;
@@ -38,33 +38,58 @@ export function createLeisureController({actors,navigation,sites,random,start,fi
     reservations.delete(record.site.id);
     for(const actor of record.actors)if(actor.target?.leisureSite===record.site.id)finish(actor);
   }
-  function request(index,kind,manual=true) {
+  function request(index,kind,manual=true,initial=false) {
     const actor=actors[index];
+    if(initial&&(!initializing||elapsed!==0))return false;
     if(!actor||!states[kind]||photo?.phase==='gathering'||photo?.phase==='posing')return false;
     if(!manual&&!available(actor))return false;
     const site=sites.find(site=>site.kind===kind&&!reservations.has(site.id));
     if(!site)return false;
     const participants=[actor];
     if(kind==='picnic') {
-      const other=actors.filter(other=>other!==actor&&available(other)&&reachable(other,site.points[1]))
-        .sort((a,b)=>distance(a,site.center)-distance(b,site.center))[0];
+      const candidates=actors.filter(other=>other!==actor&&available(other)&&reachable(other,site.points[1]));
+      const other=initial?candidates[Math.min(candidates.length-1,Math.floor(random()*candidates.length))]:
+        candidates.sort((a,b)=>distance(a,site.center)-distance(b,site.center))[0];
       if(!other)return false;participants.push(other);
     }
-    if(kind==='photo'&&site.points.length>1&&random()<.4&&
+    if(!initial&&kind==='photo'&&site.points.length>1&&random()<.4&&
         (manual||[...reservations.values()].reduce((sum,record)=>sum+record.actors.length,0)<2)) {
       const friend=actors.filter(other=>other!==actor&&other.node===actor.node&&available(other)&&distance(actor,other)<6&&reachable(other,site.points[1]))
         .sort((a,b)=>distance(a,actor)-distance(b,actor))[0];
       if(friend)participants.push(friend);
     }
     if(!participants.every((actor,i)=>reachable(actor,site.points[i])))return false;
+    if(initial&&site.points.slice(0,participants.length).some(point=>actors.some(other=>other.target?.leisureSite&&!participants.includes(other)&&distance(point,other)<1.25)))return false;
     for(const record of [...reservations.values()])if(record.actors.includes(actor))end(record);
     const record={site,actors:participants,time:0,waiting:0,started:false,cycles:0};reservations.set(site.id,record);
     participants.forEach((actor,i)=>{
       actor.leisureTime=0;actor.leisureResult=null;
       start(actor,{node:site.node,point:site.points[i],state:kind==='photo'&&i===1?'photo-posing':states[kind],leisureSite:site.id,leisureKind:kind,
-        heading:(kind==='picnic'||kind==='photo'&&participants.length===2)?Math.atan2(site.points[1-i].x-site.points[i].x,site.points[1-i].z-site.points[i].z):site.heading},manual);
+        heading:(kind==='picnic'||kind==='photo'&&participants.length===2)?Math.atan2(site.points[1-i].x-site.points[i].x,site.points[1-i].z-site.points[i].z):site.heading},manual,initial);
     });
+    if(initial) {
+      const phases={fishing:[2,8],picnic:[4,18],garden:[6,17],photo:[.5,3.5]},[from,to]=phases[kind];
+      record.time=from+random()*(to-from);record.started=true;
+      participants.forEach(actor=>{actor.leisureTime=record.time;});
+      if(kind==='garden')site.growth=record.time/24;
+    }
     return true;
+  }
+  function initialize() {
+    if(initialized||elapsed!==0||!automatic)return;
+    initialized=true;initializing=true;
+    const order=[...kinds];
+    for(let i=order.length-1;i>0;i--){const j=Math.min(i,Math.floor(random()*(i+1)));[order[i],order[j]]=[order[j],order[i]];}
+    const limit=Math.min(3,Math.max(1,actors.length-2));
+    for(const kind of order) {
+      const active=[...reservations.values()].reduce((sum,record)=>sum+record.actors.length,0);
+      if(active+(kind==='picnic'?2:1)>limit)continue;
+      const candidates=actors.filter(available);
+      if(!candidates.length)break;
+      const actor=candidates[Math.min(candidates.length-1,Math.floor(random()*candidates.length))];
+      request(actor.id,kind,false,true);
+    }
+    initializing=false;
   }
   function cancelPhoto() {
     if(!photo||!['gathering','posing'].includes(photo.phase))return false;
@@ -131,7 +156,7 @@ export function createLeisureController({actors,navigation,sites,random,start,fi
       }
     }
   }
-  return {sites,request,groupPhoto,cancelPhoto,update,get photo(){return photo;},
+  return {sites,request,initialize,groupPhoto,cancelPhoto,update,get photo(){return photo;},
     releasePhoto(){if(photo?.phase==='ready'){for(const actor of actors)if(actor.target?.leisureSite==='group-photo')finish(actor);photo={...photo,phase:'finished'};}},
     get active(){return [...reservations.values()].map(record=>({kind:record.site.kind,ids:record.actors.map(actor=>actor.id),started:record.started,time:record.time}));}};
 }

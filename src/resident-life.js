@@ -151,6 +151,7 @@ export function createResidentLife({
   leisure = false,
   leisureSites = null,
   leisureAutomatic = true,
+  leisureInitial = true,
 }) {
   const navigation = sharedNavigation(nodes, links, obstacles, crossings);
   const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -481,19 +482,35 @@ export function createResidentLife({
   actors.forEach(begin);
   const sites=leisureSites ? leisureSites.map(site=>({...site,center:{...site.center},points:site.points.map(point=>({...point})),growth:0})) : (leisure?createLeisureSites({nodes,navigation,crossings,allow:point=>!buildings.some(room=>roomContains(room,point,.5))}):[]);
   const leisureController=createLeisureController({actors,navigation,sites,random,automatic:leisureAutomatic,isPaused:id=>paused.has(id),
-    start(actor,target,manual) {
+    start(actor,target,manual,initial=false) {
       if(gathering?.ids.includes(actor.id)) {
         const companions=gathering.ids.map(id=>actors[id]).filter(other=>other!==actor);gathering=null;
         for(const other of companions){other.activity='wander';other.partner=null;if(!paused.has(other.id))begin(other);}
       }
       actor.requestedLeisure=target;actor.requestedIndoor=null;actor.activity='leisure';actor.partner=null;
       actor.coffeeWith=null;actor.manualIndoor=false;actor.nextIndoorVisit=elapsed+60;
+      // Initial placement happens before the world is rendered. Later invitations
+      // always walk the route and never reposition an already visible resident.
+      if(initial){actor.x=target.point.x;actor.z=target.point.z;actor.node=target.node;}
       begin(actor);actor.manualLeisure=Boolean(manual&&actor.target?.leisureSite);
+      if(initial&&actor.target?.leisureSite){actor.state=target.state;actor.heading=target.heading;actor.routeIndex=actor.route.length;}
     },
     finish(actor) {
       actor.activity='wander';actor.partner=null;actor.manualLeisure=false;
       actor.nextIndoorVisit=elapsed+25+random()*30;actor.leisureCompleted=(actor.leisureCompleted||0)+1;begin(actor);
     }});
+  if(leisureInitial&&leisureAutomatic&&sites.length) {
+    leisureController.initialize();
+    const occupied=actors.filter(actor=>actor.target?.leisureSite).map(actor=>({x:actor.x,z:actor.z}));
+    for(const actor of actors.filter(actor=>!actor.target?.leisureSite)) {
+      if(occupied.some(point=>distance(actor,point)<RESIDENT_SPACING)) {
+        const point=navigation.sample(actor.node,random,occupied,point=>!buildings.some(room=>roomContains(room,point,.2)));
+        if(!point)throw new Error('No safe initial resident position beside activity sites');
+        actor.x=point.x;actor.z=point.z;begin(actor);
+      }
+      occupied.push({x:actor.x,z:actor.z});
+    }
+  }
 
   function ignoredObstacle(actor) {
     if (actor.exitObstacle) return actor.exitObstacle.id;

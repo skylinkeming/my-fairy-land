@@ -26,6 +26,25 @@ function tick(life,seconds,check=()=>{}) {
     check();
   }
 }
+test('fresh scenes already contain varied random activities with safe positions before any update',()=>{
+  const assignments=new Set(),kinds=new Set();
+  for(let initial=1;initial<=20;initial++) {
+    let seed=initial;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+    const life=createResidentLife({nodes,links:[],leisureSites:sites,count:6,random});
+    const active=life.actors.filter(actor=>actor.target?.leisureSite);
+    assert.equal(active.length,3,'some residents start in activities while others keep walking');
+    assert.ok(new Set(active.map(actor=>actor.target.leisureKind)).size>=2);
+    assert.ok(active.every(actor=>actor.state!=='walking'&&actor.leisureTime>0&&!actor.manualLeisure));
+    for(const actor of life.actors) {
+      assert.ok(life.navigation.walkable(actor));
+      for(const other of life.actors)if(other.id>actor.id)assert.ok(Math.hypot(actor.x-other.x,actor.z-other.z)>=1.18-1e-6);
+    }
+    assignments.add(active.map(actor=>`${actor.id}:${actor.state}`).join(','));
+    active.forEach(actor=>kinds.add(actor.target.leisureKind));
+    assert.ok(life.leisure.active.every(record=>record.started));
+  }
+  assert.ok(assignments.size>1);assert.deepEqual([...kinds].sort(),['fishing','garden','photo','picnic']);
+});
 test('fishing travels to its spot, cycles through catches, pauses and eventually leaves',()=>{
   const life=setup();assert.equal(life.requestLeisure(0,'fishing'),true);
   for(let i=0;i<400&&life.actors[0].state!=='fishing';i++)life.update(.05);

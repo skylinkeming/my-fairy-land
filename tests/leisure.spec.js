@@ -1,7 +1,8 @@
 import {test,expect} from '@playwright/test';
 test.setTimeout(180000);
 
-test.beforeEach(async({page})=>{
+test.beforeEach(async({page},info)=>{
+  const initial=info.title.startsWith('refresh starts');
   await page.emulateMedia({reducedMotion:'reduce'});
   // Use the real simulation and renderer, with access to their instances so
   // journeys can be simulated without waiting several real-world minutes.
@@ -9,11 +10,34 @@ test.beforeEach(async({page})=>{
     await page.route(url=>url.pathname===`/src/${file}`&&!url.searchParams.has('leisure-original'),route=>route.fulfill({contentType:'text/javascript',body:`
       export * from '/src/${file}?leisure-original';
       import {${factory} as original} from '/src/${file}?leisure-original';
-      export function ${factory}(...args){${factory==='createResidentLife'?"let seed=7;args[0]={...args[0],random:()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}};":''}const value=original(...args);window.${variable}=${variable==='testArt'?'args[0]':'value'};return value;}
+      export function ${factory}(...args){${factory==='createResidentLife'?(initial?'args[0]={...args[0],leisureInitial:true};':"let seed=7;args[0]={...args[0],leisureInitial:false,random:()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}};"):''}const value=original(...args);window.${variable}=${variable==='testArt'?'args[0]':'value'};return value;}
     `}));
   }
   await page.goto('/');
   await page.waitForFunction(()=>window.testLife&&window.testWorld&&window.testArt,null,{timeout:90000});
+});
+
+test('refresh starts with residents already doing random activities, with visible props',async({page},info)=>{
+  const snapshot=()=>page.evaluate(()=>{
+    const life=window.testLife,active=life.actors.filter(actor=>actor.target?.leisureSite);
+    const names={fishing:'leisure-fishing-rod',picnic:'leisure-biscuit',garden:'leisure-watering-can',photo:'leisure-camera'};
+    return {
+      active:active.map(actor=>({id:actor.id,state:actor.state,kind:actor.target.leisureKind,time:actor.leisureTime})),
+      visible:active.every(actor=>window.testArt.residents[actor.id].g.getObjectByName(names[actor.target.leisureKind]).visible),
+      safe:life.actors.every(actor=>life.navigation.walkable(actor)&&life.actors.every(other=>other===actor||Math.hypot(actor.x-other.x,actor.z-other.z)>=1.18-1e-6)),
+    };
+  });
+  const before=await snapshot();expect(before.active).toHaveLength(3);
+  expect(before.active.every(actor=>actor.state!=='walking')).toBe(true);
+  expect(new Set(before.active.map(actor=>actor.kind)).size).toBeGreaterThanOrEqual(2);
+  expect(before.visible).toBe(true);expect(before.safe).toBe(true);
+  await page.locator('.island-card[data-open="friends"]').click();
+  await expect(page.locator('.resident-status').filter({hasText:/釣魚|野餐|澆水|相機/})).toHaveCount(3);
+  await page.locator('#close-panel').click();
+  await page.reload();await page.waitForFunction(()=>window.testLife&&window.testWorld&&window.testArt,null,{timeout:90000});
+  const after=await snapshot();expect(after.active).toHaveLength(3);expect(after.visible).toBe(true);expect(after.safe).toBe(true);
+  expect(JSON.stringify(after.active)).not.toBe(JSON.stringify(before.active));
+  await page.locator('#world-canvas').screenshot({path:info.outputPath('initial-activities.png')});
 });
 
 test('all four activities use real scenery, props and safe walking routes',async({page},info)=>{

@@ -383,7 +383,7 @@ test("resident activities differ after refresh and the watch button brings them 
   );
 });
 
-test("residents initially explore six different islands and can still be inspected", async ({page}) => {
+test("residents start with varied activities across islands and can still be inspected", async ({page}) => {
   await page.addInitScript(() => {Math.random = () => .1; sessionStorage.removeItem('little-island-last-activity');});
   await page.reload();
   await expect(page.locator('#world')).toHaveAttribute('data-render-mode', 'three');
@@ -394,8 +394,8 @@ test("residents initially explore six different islands and can still be inspect
   const cards = page.locator('.resident-card');
   await expect(cards).toHaveCount(6);
   const islands = await cards.evaluateAll(elements => elements.map(element => element.dataset.residentIsland));
-  expect(new Set(islands).size).toBe(6);
-  await expect(page.locator('.resident-status').filter({hasText: '散步'})).toHaveCount(6);
+  expect(new Set(islands).size).toBeGreaterThanOrEqual(3);
+  await expect(page.locator('.resident-status').filter({hasText:/釣魚|野餐|澆水|相機/})).toHaveCount(3);
   await cards.first().locator('[data-watch-resident]').click();
   await expect(page.locator('#world')).toHaveAttribute('data-paused-resident', '0');
 });
@@ -873,7 +873,8 @@ test('real scenery navigation keeps residents out of props and connected across 
       let state = seed;
       const random = () => {state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296;};
       const life = createResidentLife({...data, random});
-      if (new Set(life.actors.map(actor => actor.node)).size !== 6) throw Error('Residents must spawn on six different islands');
+      if (new Set(life.actors.map(actor => actor.node)).size < 3) throw Error('Residents must remain distributed across islands');
+      if(life.actors.filter(actor=>actor.target?.leisureSite&&actor.state!=='walking').length!==3)throw Error('Three residents must already be doing activities on load');
       let socialFrames = 0;
       const travelled = life.actors.map(() => 0);
       for (let frame = 0; frame < 3000; frame++) {
