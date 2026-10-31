@@ -102,3 +102,34 @@ test('collision prediction stops at a final pose but still detects an incoming w
   assert.equal(predictsCollision(actor,{x:0,z:3},{x:0,z:1},{x:0,z:0}),false);
   assert.equal(predictsCollision(actor,{x:0,z:4,route:[{x:0,z:-4}],routeIndex:0},{x:0,z:1},{x:0,z:-1}),true);
 });
+
+
+test('reinviting a fisher succeeds without resetting time, and full spots queue the next resident',()=>{
+  const life=setup();assert.equal(life.requestLeisure(0,'fishing'),true);
+  tick(life,8);const time=life.actors[0].leisureTime;
+  assert.equal(life.requestLeisure(0,'fishing'),true);
+  assert.equal(life.leisure.lastRequest.status,'already-active');assert.equal(life.actors[0].leisureTime,time);
+  assert.equal(life.actors[0].manualLeisure,true);
+  assert.equal(life.requestLeisure(1,'fishing'),true);assert.equal(life.leisure.lastRequest.status,'queued');
+  assert.equal(life.actors[1].leisureQueue,'fishing');
+  assert.equal(life.requestLeisure(1,'fishing'),true);
+  let started=false;tick(life,85,()=>{if(life.actors[1].state==='fishing')started=true;});
+  assert.ok(started,'queued resident receives the released fishing spot');assert.equal(life.actors[1].leisureQueue,null);
+});
+
+test('activity markers distinguish walking, travelling, queued and actual activity',async()=>{
+  const {residentActivityMarker:marker}=await import('../src/resident-activity-marker.js');
+  assert.equal(marker({state:'walking'}),null);
+  assert.equal(marker({state:'walking',leisureQueue:'fishing'}).label,'排隊等釣魚');
+  assert.equal(marker({state:'walking',target:{leisureSite:'fish',leisureKind:'fishing'}}).label,'前往釣魚');
+  for(const state of ['fishing','picnicking','gardening','photographing','photo-posing','indoors'])assert.ok(marker({state}).label);
+  assert.equal(marker({state:'fishing'},true).label,'釣魚中 · 暫停');
+});
+
+
+test('reduced motion lets a finished fisher clear the spot for the waiting resident',()=>{
+  const life=setup();life.requestLeisure(0,'fishing');life.requestLeisure(1,'fishing');
+  let started=false;
+  for(let i=0;i<1600&&!started;i++){life.update(.05,true);started=life.actors[1].state==='fishing';}
+  assert.ok(started,'the previous fisher walks clear instead of freezing on the released spot');
+});

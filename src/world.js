@@ -1,4 +1,5 @@
-import {LEISURE_LABELS} from './resident-leisure.js';
+import {LEISURE_LABELS,leisureRequestMessage} from './resident-leisure.js';
+import {residentActivityMarker} from './resident-activity-marker.js';
 import {createLeisureArt} from './resident-leisure-art.js';
 import {buildEnterableBuilding,clearBuildingFootprints,roomContains} from './enterable-buildings.js';
 import {addRiversideWatermill} from './island-landmarks.js';
@@ -25,7 +26,7 @@ export function createWorld(
   onSelect,
   icon,
   onReminder = () => onSelect("todo"),
-  { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, onGroupPhotoChange = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
+  { onResidentSelect = () => {}, onVisitChange = () => {}, onActivityChange = () => {}, onReady = () => {}, onEditResident = () => {}, onGroupPhotoChange = () => {}, onActivityNotice = () => {}, residentShapes = {}, isUiCovered = () => false, reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches } = {},
 ) {
   const sceneryAnimations = [], buildingViews = [];
   let showAllInteriors = false;
@@ -1073,6 +1074,14 @@ export function createWorld(
   hl.className = "home-label";
   hl.textContent = "✿ 中央湖畔公園";
   container.querySelector("#world-labels").append(hl);
+  const activityBadges=residents.map((resident,index)=>{
+    const el=document.createElement('button');el.type='button';el.className='resident-activity-badge';el.hidden=true;
+    el.dataset.resident=String(index);el.onclick=()=>visitResident(index);
+    const icon=document.createElement('span'),label=document.createElement('span'),stem=document.createElement('i');
+    icon.className='resident-badge-icon';icon.setAttribute('aria-hidden','true');label.className='resident-badge-label';stem.className='resident-badge-stem';stem.setAttribute('aria-hidden','true');
+    el.append(icon,label,stem);container.querySelector('#world-labels').append(el);
+    return {el,icon,label,resident,index};
+  });
   let width = 1,
     height = 1;
   function resize() {
@@ -1281,7 +1290,27 @@ export function createWorld(
       container.dataset.residentBubbleVisible=String(head.z>=-1 && head.z<=1 && headX>=0 && headX<=width && headY>=0 && headY<=height);
       container.dataset.residentHeadX=String(headX);container.dataset.residentHeadY=String(headY);
     }
-    const placedLabels = [];
+    const badgeRects=[];
+    for(const badge of activityBadges) {
+      const actor=life.actors[badge.index],marker=residentActivityMarker(actor,life.isPaused(actor.id));
+      if(!marker){badge.el.hidden=true;continue;}
+      const point=badge.resident.g.getWorldPosition(new T.Vector3());point.y+=(badge.resident.headHeight||1.7)+.12;point.project(camera);
+      const headX=(point.x*.5+.5)*width,headY=(-point.y*.5+.5)*height;
+      if(point.z < -1 || point.z > 1 || headX<0 || headX>width || headY<0 || headY>height){badge.el.hidden=true;continue;}
+      badge.el.hidden=false;badge.el.dataset.activity=marker.kind;badge.el.dataset.state=actor.state;
+      badge.icon.textContent=marker.icon;badge.label.textContent=marker.label;
+      badge.el.setAttribute('aria-label',`查看娃娃：${marker.label}`);
+      const half=badge.el.offsetWidth/2,h=badge.el.offsetHeight;
+      const x=T.MathUtils.clamp(headX,half+8,Math.max(half+8,width-half-8));
+      const speechHeight=interactingResident===badge.index?(container.querySelector('.resident-speech')?.offsetHeight||64)+16:0;
+      const desired=Math.max(h+8,headY-14-speechHeight);
+      const choices=[0,1,2,3,4,5].map(row=>Math.max(h+8,desired-row*(h+5)));
+      const y=choices.find(bottom=>badgeRects.every(rect=>x+half<rect.left-3||x-half>rect.right+3||bottom<rect.top-3||bottom-h>rect.bottom+3))||desired;
+      badgeRects.push({left:x-half,right:x+half,top:y-h,bottom:y});
+      badge.el.style.transform=`translate(-50%,-100%) translate(${x}px,${y}px)`;
+      badge.el.style.setProperty('--badge-tail',`${headX-x}px`);badge.el.style.setProperty('--badge-stem',`${Math.max(8,headY-y)}px`);
+    }
+    const placedLabels = [...badgeRects];
     for (const l of labels) {
       const p = l.point.clone().project(camera);
       const half = l.el.offsetWidth / 2 + 8;
@@ -1362,6 +1391,7 @@ export function createWorld(
     dispose() {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+      activityBadges.forEach(badge=>badge.el.remove());
       leisureArt.dispose();
       residents.forEach(resident => disposeShapeGeometry(resident.g));
       controls.dispose();
@@ -1425,8 +1455,11 @@ export function createWorld(
     },
     doActivity(index,kind) {
       if(!life.requestLeisure(index,kind))return false;
+      const result=life.leisure.lastRequest;
+      if(result.status==='queued'||result.status==='already-active')onActivityNotice(leisureRequestMessage(result));
       finishResidentVisit();frameDirty=true;focusedResident=index;framedLeisureSite=null;return true;
     },
+    getActivityRequestMessage(){return leisureRequestMessage(life.leisure.lastRequest);},
     takeGroupPhoto() {
       finishResidentVisit();
       if(!life.leisure.groupPhoto())return false;

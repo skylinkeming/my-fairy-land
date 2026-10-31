@@ -235,7 +235,7 @@ export function createResidentLife({
   let gathering = null;
   const seatOwners=new Map();
   let coffeeGatherings=0;
-  const protectedVisit=actor=>Boolean(actor.target?.roomId || actor.target?.leavingRoom || actor.target?.leisureSite);
+  const protectedVisit=actor=>Boolean(actor.target?.roomId || actor.target?.leavingRoom || actor.target?.leisureSite || actor.leisureQueue || actor.leisureExit);
   function occupancy(id) {
     return actors.filter(
       (actor) => actor.node === id || actor.target?.node === id,
@@ -258,6 +258,7 @@ export function createResidentLife({
   function requestIndoor(actor,type=null,manual=false) {
     const target=indoorGoal(actor,type,manual);
     if(!target) return false;
+    actor.leisureQueue=null;
     if(gathering?.ids.includes(actor.id)) {
       const companions=gathering.ids.map(id=>actors[id]).filter(other=>other!==actor);
       gathering=null;
@@ -374,7 +375,7 @@ export function createResidentLife({
     actor.bridgeYield = null;
     actor.goalMode = mode;
     actor.target = target;
-    if(!target.leisureSite)actor.manualLeisure=false;
+    if(!target.leisureSite)actor.manualLeisure=Boolean(actor.leisureQueue);
     actor.route = route || [{ x: actor.x, z: actor.z }];
     actor.routeIndex = 1;
     actor.state = route ? "walking" : "waiting";
@@ -487,7 +488,7 @@ export function createResidentLife({
         const companions=gathering.ids.map(id=>actors[id]).filter(other=>other!==actor);gathering=null;
         for(const other of companions){other.activity='wander';other.partner=null;if(!paused.has(other.id))begin(other);}
       }
-      actor.requestedLeisure=target;actor.requestedIndoor=null;actor.activity='leisure';actor.partner=null;
+      actor.leisureExit=null;actor.requestedLeisure=target;actor.requestedIndoor=null;actor.activity='leisure';actor.partner=null;
       actor.coffeeWith=null;actor.manualIndoor=false;actor.nextIndoorVisit=elapsed+60;
       // Initial placement happens before the world is rendered. Later invitations
       // always walk the route and never reposition an already visible resident.
@@ -496,8 +497,10 @@ export function createResidentLife({
       if(initial&&actor.target?.leisureSite){actor.state=target.state;actor.heading=target.heading;actor.routeIndex=actor.route.length;}
     },
     finish(actor) {
+      const exit=actor.manualLeisure&&actor.target?.leisureKind!=='group'?{x:actor.x,z:actor.z}:null;
       actor.activity='wander';actor.partner=null;actor.manualLeisure=false;
       actor.nextIndoorVisit=elapsed+25+random()*30;actor.leisureCompleted=(actor.leisureCompleted||0)+1;begin(actor);
+      if(exit){actor.leisureExit=exit;actor.manualLeisure=true;}
     }});
   if(leisureInitial&&leisureAutomatic&&sites.length) {
     leisureController.initialize();
@@ -948,6 +951,8 @@ export function createResidentLife({
     }
   }
   function update(dt,manualOnly=false) {
+    // Complete the short walk away before reduced motion freezes a released spot.
+    for(const actor of actors)if(actor.leisureExit&&distance(actor,actor.leisureExit)>=1.6){actor.leisureExit=null;if(!actor.target?.leisureSite)actor.manualLeisure=Boolean(actor.leisureQueue);}
     const frozen=[];
     if(manualOnly) for(const actor of actors) if(!actor.manualIndoor && !actor.manualLeisure && !paused.has(actor.id)) {frozen.push([actor,actor.paused]);paused.add(actor.id);actor.paused=true;}
     let remaining = Math.max(0, dt);

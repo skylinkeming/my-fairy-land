@@ -68,6 +68,7 @@ export function WorldViewport({
   onReady,
   onEdit,
   onGroupPhotoChange,
+  onActivityNotice,
   shapes,
   suspended,
 }) {
@@ -80,6 +81,7 @@ export function WorldViewport({
       onReady,
       onEdit,
       onGroupPhotoChange,
+      onActivityNotice,
       shapes,
       suspended,
     });
@@ -91,6 +93,7 @@ export function WorldViewport({
     onReady,
     onEdit,
     onGroupPhotoChange,
+    onActivityNotice,
     suspended,
   };
   const [reducedMotion, setReducedMotion] = useState(
@@ -151,6 +154,7 @@ export function WorldViewport({
               lastGreetings.current.set(index,greeting);
               setVisit({index,name,greeting});
             },
+            onActivityNotice:value=>callbacks.current.onActivityNotice?.(value),
             onGroupPhotoChange: value=>callbacks.current.onGroupPhotoChange?.(value),
             onEditResident: (index) => callbacks.current.onEdit(index),
             residentShapes: shapesRef.current,
@@ -242,7 +246,7 @@ export function WorldViewport({
           if(!worldRef.current?.goHome(visit.index)) setVisit(value=>({...value,greeting:'家裡的座位正有人使用，等一下再回去休息吧。'}));
         }}>回家休息</button>
         {[["fishing","去釣魚"],["picnic","去野餐"],["garden","照顧花園"],["photo","去拍風景"]].map(([kind,label])=><button key={kind} type="button" onClick={()=>{
-          if(!worldRef.current?.doActivity(visit.index,kind))setVisit(value=>({...value,greeting:'活動地點或朋友暫時沒空，等一下再邀請我吧。'}));
+          if(!worldRef.current?.doActivity(visit.index,kind))setVisit(value=>({...value,greeting:worldRef.current?.getActivityRequestMessage?.()||'活動暫時無法安排，請稍後再試。'}));
         }}>{label}</button>)}
         </div>
       </section>

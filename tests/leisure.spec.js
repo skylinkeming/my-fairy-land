@@ -27,6 +27,7 @@ test('refresh starts with residents already doing random activities, with visibl
       safe:life.actors.every(actor=>life.navigation.walkable(actor)&&life.actors.every(other=>other===actor||Math.hypot(actor.x-other.x,actor.z-other.z)>=1.18-1e-6)),
     };
   });
+  await expect(page.locator('.resident-activity-badge:visible').first()).toBeVisible();
   const before=await snapshot();expect(before.active).toHaveLength(3);
   expect(before.active.every(actor=>actor.state!=='walking')).toBe(true);
   expect(new Set(before.active.map(actor=>actor.kind)).size).toBeGreaterThanOrEqual(2);
@@ -43,7 +44,8 @@ test('refresh starts with residents already doing random activities, with visibl
 test('all four activities use real scenery, props and safe walking routes',async({page},info)=>{
   test.setTimeout(180000);
   const sites=await page.evaluate(()=>window.testLife.leisure.sites.map(site=>site.kind));
-  expect(sites.sort()).toEqual(['fishing','garden','photo','picnic']);
+  expect([...new Set(sites)].sort()).toEqual(['fishing','garden','photo','picnic']);
+  expect(sites.filter(kind=>kind==='fishing').length).toBeGreaterThanOrEqual(2);
   for(const [kind,label,state,prop] of [['fishing','去釣魚','fishing','leisure-fishing-rod'],['picnic','去野餐','picnicking','leisure-biscuit'],['garden','照顧花園','gardening','leisure-watering-can'],['photo','去拍風景','photographing','leisure-camera']]) {
     const index=await page.evaluate(kind=>{
       const life=window.testLife,site=life.leisure.sites.find(site=>site.kind===kind);
@@ -104,4 +106,39 @@ test('group photo gathers six residents and downloads an actual PNG',async({page
   const download=page.waitForEvent('download');await link.click();expect((await download).suggestedFilename()).toBe('our-little-island-family.png');
   expect(await page.evaluate(()=>window.testLife.actors.every(actor=>!actor.manualLeisure))).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('fishing invitations use multiple spots, show overhead status and queue when all are reserved',async({page},info)=>{
+  const result=await page.evaluate(()=>{
+    const life=window.testLife,world=window.testWorld;
+    const count=life.leisure.sites.filter(site=>site.kind==='fishing').length;
+    const invited=[];
+    for(let i=0;i<count;i++) {
+      if(!world.doActivity(i,'fishing'))throw Error('Free fishing spot rejected');
+      invited.push(life.actors[i].target.leisureSite);
+    }
+    if(!world.doActivity(0,'fishing')||life.leisure.lastRequest.status!=='already-active')throw Error('Existing fisher rejected');
+    if(!world.doActivity(count,'fishing')||life.leisure.lastRequest.status!=='queued')throw Error('Full fishing spots did not queue');
+    world.focusResident(count);
+    return {count,invited,index:count};
+  });
+  expect(result.count).toBeGreaterThanOrEqual(2);expect(new Set(result.invited).size).toBe(result.count);
+  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toContainText('排隊等釣魚');
+  await page.locator(`.resident-activity-badge[data-resident="${result.index}"]`).click();
+  await expect(page.locator('#world')).toHaveAttribute('data-paused-resident',String(result.index));
+  await page.locator('#world').screenshot({path:info.outputPath('fishing-queue-marker.png')});
+  const started=await page.evaluate(index=>{
+    window.testWorld.endResidentVisit();
+    const life=window.testLife;let started=false;
+    for(let i=0;i<3000&&!started;i++) {
+      life.update(.1,true);started=life.actors[index].state==='fishing';
+      for(const actor of life.actors) {
+        if(!life.navigation.walkable(actor))throw Error('Fishing route left walking network');
+        for(const other of life.actors)if(actor.id<other.id&&Math.hypot(actor.x-other.x,actor.z-other.z)<1.18-1e-6)throw Error('Fishing routes overlap');
+      }
+    }
+    window.testWorld.focusResident(index);return started;
+  },result.index);
+  expect(started).toBe(true);
+  await expect(page.locator(`.resident-activity-badge[data-resident="${result.index}"]`)).toContainText('釣魚中');
 });

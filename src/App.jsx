@@ -460,6 +460,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
               onReady={onReady}
               onEdit={editShape}
               onGroupPhotoChange={setGroupPhoto}
+              onActivityNotice={notify}
               shapes={shapes}
               suspended={Boolean(panel) || editor !== null || familyOpen}
             />

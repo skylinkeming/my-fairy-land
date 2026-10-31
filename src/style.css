@@ -3586,3 +3586,13 @@ body.family-open {overflow:hidden;}
 .group-photo-download { display: inline-flex; align-items: center; color: #516647; text-decoration: none; }
 
 .group-photo-progress { color: #725f43; white-space: nowrap; padding: 0 4px; }
+
+.resident-activity-badge { position:absolute;top:0;left:0;z-index:15;display:inline-flex;align-items:center;gap:5px;max-width:166px;padding:6px 10px;border:2px solid #fff9e8;border-radius:15px;background:#ffe09a;color:#573d20;font:700 12px/1.4 system-ui,sans-serif;box-shadow:0 3px 10px #382c3655;pointer-events:auto;cursor:pointer;white-space:nowrap; }
+.resident-activity-badge[hidden] { display:none; }
+.resident-activity-badge[data-activity="fishing"] { background:#bcecf4;color:#16485b; }
+.resident-activity-badge[data-activity="garden"] { background:#cef0b7;color:#2c572c; }
+.resident-activity-badge[data-activity="photo"],.resident-activity-badge[data-activity="group"] { background:#e7ccfa;color:#51376e; }
+.resident-badge-icon { font-size:17px;line-height:1; }
+.resident-badge-stem { position:absolute;left:calc(50% + var(--badge-tail,0px));top:100%;width:2px;height:var(--badge-stem,10px);background:#fff8dfcc;pointer-events:none; }
+.resident-badge-stem::after { content:'';position:absolute;left:-3px;bottom:0;width:8px;height:8px;border-radius:50%;background:#ffe2a1;border:1px solid #fff9e8; }
+.resident-activity-badge:focus-visible { outline:3px solid #624d95;outline-offset:3px; }
