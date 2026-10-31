@@ -308,6 +308,48 @@ test('wide bridges preserve two parallel lanes for walkers travelling together',
   assert.ok(life.actors.every(actor => actor.x < -16), 'both parallel lanes make progress across the bridge');
 });
 
+test('bridge waypoints on the opposite lane do not trap walkers at the landing', () => {
+  for (const reversed of [false, true]) {
+    const nodes = [
+      {id:'home',x:0,z:0,walkRadius:12,bridgeHalfWidth:.94},
+      {id:'todo',x:-28,z:0,walkRadius:12,bridgeHalfWidth:.94},
+    ];
+    const life=createResidentLife({nodes,links:[['home','todo']],count:1,random:()=>.1});
+    const actor=life.actors[0], end={x:reversed?-8:-20,z:reversed?.68:-.68};
+    Object.assign(actor,{x:reversed?-18:-10,z:end.z,node:reversed?'todo':'home',state:'walking',activity:'wander',partner:null,
+      route:[{x:reversed?-16.72:-11.28,z:end.z},{x:reversed?-11.28:-16.72,z:end.z},end],routeIndex:0,
+      target:{node:reversed?'home':'todo',point:end,state:'waiting'}});
+    let reversals=0,previous=0;
+    for(let frame=0;frame<1000 && actor.state==='walking';frame++) {
+      const before={x:actor.x,z:actor.z};life.update(.025);
+      assert.ok(life.navigation.walkable(actor));
+      assert.ok(Math.hypot(actor.x-before.x,actor.z-before.z)<=.023751,'cross without teleporting');
+      const direction=Math.sign(actor.x-before.x);
+      if(direction && previous && direction!==previous)reversals++;
+      if(direction)previous=direction;
+    }
+    assert.equal(actor.state,'waiting','finish the complete route, including the bridge exit waypoint');
+    assert.ok(Math.hypot(actor.x-end.x,actor.z-end.z)<.03);
+    assert.ok(reversals<=1,'do not repeatedly reverse at the bridge waypoint');
+  }
+});
+
+test('walkers can turn toward a nearby island destination after leaving a wide bridge', () => {
+  const nodes=[{id:'home',x:0,z:0,walkRadius:12,bridgeHalfWidth:.94},{id:'todo',x:-28,z:0,walkRadius:12,bridgeHalfWidth:.94}];
+  for (const destination of [{x:-17.1,z:2},{x:-10.9,z:-2},{x:-16.5,z:3},{x:-11.5,z:-3}]) {
+    const life=createResidentLife({nodes,links:[['home','todo']],count:1,random:()=>.1});
+    const actor=life.actors[0],reversed=destination.x>-14;
+    Object.assign(actor,{x:reversed?-16:-12,z:reversed?-.68:.68,node:reversed?'todo':'home',state:'walking',activity:'wander',partner:null,
+      route:[{x:reversed?-11.28:-16.72,z:reversed?-.68:.68},destination],routeIndex:0,
+      target:{node:reversed?'home':'todo',point:destination,state:'waiting'}});
+    for(let frame=0;frame<800 && actor.state==='walking';frame++) {
+      life.update(.025);assert.ok(life.navigation.walkable(actor));
+    }
+    assert.equal(actor.state,'waiting','release the bridge lane before turning onto the island');
+    assert.ok(Math.hypot(actor.x-destination.x,actor.z-destination.z)<.03);
+  }
+});
+
 test('a tight passage uses stable priority and waiting instead of switching sides', () => {
   const obstacles = [
     {id: 'upper-wall', minX: -3, maxX: 3, minZ: .65, maxZ: 5},

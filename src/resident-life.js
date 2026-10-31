@@ -206,6 +206,8 @@ export function createResidentLife({
       dx = (b.x - a.x) / length,
       dz = (b.z - a.z) / length;
     return {
+      from: a,
+      to: b,
       x: a.x + dx * (a.walkRadius || 6) * .94,
       z: a.z + dz * (a.walkRadius || 6) * .94,
       halfWidth: Math.min(a.bridgeHalfWidth ?? .18, b.bridgeHalfWidth ?? .18),
@@ -525,6 +527,21 @@ export function createResidentLife({
     for (const bridge of bridges) {
       if (!inBridge(actor, bridge, .8, bridge.halfWidth + .2)) continue;
       if (bridge.halfWidth >= .8) {
+        const along = point => (point.x - bridge.x) * bridge.dx + (point.z - bridge.z) * bridge.dz;
+        const position = along(actor), waypoint = along(next);
+        // Once both walker and goal are on the same landing, follow the island
+        // route directly. Lane steering here would prevent turning off the bridge.
+        if ((position < 0 && waypoint < 0) || (position > bridge.length && waypoint > bridge.length)) continue;
+        // The circular shoreline overlaps the bridge ends. An island turn can
+        // start within that overlap, before passing the bridge's end plane.
+        if (!inBridge(next, bridge, 0, bridge.halfWidth + .2) &&
+            [bridge.from, bridge.to].some(node => distance(actor, node) <= (node.walkRadius || 6) && distance(next, node) <= (node.walkRadius || 6))) continue;
+        // A waypoint on the opposite lane is reached by longitudinal progress,
+        // not by crossing back over traffic to its original lateral position.
+        // Final destinations still require reaching their exact position.
+        if (next !== actor.route.at(-1) && !actor.bridgeYield && !actor.departure &&
+            inBridge(next, bridge, 0, bridge.halfWidth + .2) && Math.abs(waypoint - position) < .12) return true;
+        if (next === actor.route.at(-1) && inBridge(next, bridge, 0, bridge.halfWidth + .2)) continue;
         const travel = desired.x * bridge.dx + desired.z * bridge.dz >= 0 ? 1 : -1;
         const lateral = (actor.x - bridge.x) * bridge.dz - (actor.z - bridge.z) * bridge.dx;
         const nearby = actors.filter(other => other !== actor && distance(actor, other) < 5);
@@ -546,8 +563,6 @@ export function createResidentLife({
         const length = Math.hypot(x, z);
         direction = {x: x / length, z: z / length};
         aligning = true;
-        // Lane-offset bridge waypoints are passed without returning to the centerline.
-        if (remaining < 1 && Math.abs((next.x - actor.x) * bridge.dx + (next.z - actor.z) * bridge.dz) < .12) return true;
       } else {
         actor.avoidance = null;
         const lateral = (actor.x - bridge.x) * bridge.dz - (actor.z - bridge.z) * bridge.dx;
