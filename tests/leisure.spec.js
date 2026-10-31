@@ -222,3 +222,21 @@ test('weather control shows rain, real shared umbrellas, shelter and sunny shade
   await page.locator('#island-weather').click();await expect(page.locator('#world')).toHaveAttribute('data-weather','sunny');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+test('rotating close-ups keeps the camera above the board without clipping its foreground',async({page},info)=>{
+  for(const viewport of [{width:1440,height:1000},{width:390,height:844}]){
+    await page.setViewportSize(viewport);
+    await page.evaluate(()=>window.testWorld.focusResident(0));
+    await expect(page.locator('#world')).toHaveAttribute('data-paused-resident','0');
+    const canvas=page.locator('#world-canvas'),rect=await canvas.boundingBox();
+    for(const delta of [[0,rect.height*2],[rect.width*1.5,0],[0,-rect.height*2],[-rect.width*1.5,0]]){
+      const x=rect.x+rect.width*.53,y=rect.y+rect.height*.57;
+      await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+delta[0],y+delta[1],{steps:8});await page.mouse.up();
+      const view=await page.evaluate(()=>window.testWorld.getCameraState());
+      expect(view.polarAngle).toBeLessThanOrEqual(1.35+1e-6);expect(view.position[1]).toBeGreaterThan(view.target[1]);
+      expect(view.distance).toBeGreaterThanOrEqual(160-1e-6);expect(view.far).toBe(400);
+    }
+    await canvas.screenshot({path:info.outputPath(`rotation-${viewport.width}.png`)});
+    await page.evaluate(()=>window.testWorld.endResidentVisit());
+  }
+});

@@ -1,3 +1,4 @@
+import {MAP_CAMERA_DISTANCE,MAP_CAMERA_FAR,MAP_MAX_POLAR_ANGLE,mapViewPosition} from './world-camera.js';
 import {createResidentStoriesArt} from './resident-stories-art.js';
 import {WEATHER_LABELS} from './island-weather.js';
 import {LEISURE_LABELS,leisureRequestMessage} from './resident-leisure.js';
@@ -44,12 +45,13 @@ export function createWorld(
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   const scene = new T.Scene(),
-    camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 240);
+    camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, MAP_CAMERA_FAR);
   camera.position.set(42, 53, 65);
   let defaultZoom = innerWidth <= 760 ? 1.4 : 1;
   camera.zoom = defaultZoom;
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = !reduced;
+  controls.minDistance=MAP_CAMERA_DISTANCE;
   controls.minZoom = 0.68;
   controls.maxZoom = 14;
   controls.enablePan = true;
@@ -836,7 +838,7 @@ export function createWorld(
     camera.zoom = 13.8;
     camera.updateProjectionMatrix();
     controls.minPolarAngle = .08;
-    controls.maxPolarAngle = Math.PI - .08;
+    controls.maxPolarAngle = MAP_MAX_POLAR_ANGLE;
     controls.mouseButtons.LEFT = T.MOUSE.ROTATE;
     controls.touches.ONE = T.TOUCH.ROTATE;
     controls.update();
@@ -950,7 +952,7 @@ export function createWorld(
     let best=null;
     const angles=group?[0,Math.PI,-Math.PI/2,Math.PI/2,-Math.PI/4,Math.PI/4,Math.PI*3/4,-Math.PI*3/4]:[0,-Math.PI/4,Math.PI/4,-Math.PI/2,Math.PI/2,-Math.PI*3/4,Math.PI*3/4,Math.PI];
     for(const elevation of (group?[16,24]:[4,8,16,24]))for(const offset of angles) {
-      const angle=preferred+offset,position=new T.Vector3(center.x+Math.sin(angle)*12,top+elevation,center.z+Math.cos(angle)*12);
+      const angle=preferred+offset,position=mapViewPosition(center,angle,elevation,top);
       let visible=0;
       for(const [index,point] of points.entries()) {
         let clear=true;
@@ -967,7 +969,7 @@ export function createWorld(
       if(visible===points.length)break;
     }
     if(!best)return;
-    if(!group)controls.maxPolarAngle=Math.max(controls.maxPolarAngle,1.35);
+    if(!group)controls.maxPolarAngle=Math.max(controls.maxPolarAngle,MAP_MAX_POLAR_ANGLE);
     container.dataset.focusVisibleResidents=String(best.visible);
     focusedResident=group?null:actors[0].id;
     controls.target.set(center.x,top+.8,center.z);camera.position.copy(best.position);
@@ -1481,6 +1483,7 @@ export function createWorld(
     },
     setWeather(state){const changed=life.weather.set(state);if(changed){life.leisure.update(0);frameDirty=true;}return changed;},
     getWeather(){return life.weather.state;},
+    getCameraState(){const offset=camera.position.clone().sub(controls.target);return {distance:offset.length(),polarAngle:new T.Spherical().setFromVector3(offset).phi,maxPolarAngle:controls.maxPolarAngle,near:camera.near,far:camera.far,zoom:camera.zoom,position:camera.position.toArray(),target:controls.target.toArray()};},
     getActivityRequestMessage(){return leisureRequestMessage(life.leisure.lastRequest);},
     takeGroupPhoto() {
       finishResidentVisit();
