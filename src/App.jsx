@@ -104,7 +104,7 @@ function IslandModal({ panel, photoOpen, onClose, children, sharedTodos }) {
           if (event.key !== "Tab" || photoOpen) return;
           const elements = [
             ...ref.current.querySelectorAll(
-              'button,input,textarea,[tabindex="0"]',
+              'a[href],button,input,textarea,[tabindex="0"]',
             ),
           ].filter(
             (element) => !element.disabled && element.getClientRects().length,

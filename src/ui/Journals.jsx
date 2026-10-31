@@ -3,11 +3,20 @@ import { createPortal } from "react-dom";
 import { dateString, today } from "../household.js";
 import { getUpcomingTodos, isInReminderWindow } from "../todo-reminders.js";
 import { Icon } from "./Icon.jsx";
+import { googleCalendarUrl } from "../google-calendar.js";
 const prettyDate = (date) =>
   new Date(date + "T12:00:00").toLocaleDateString("zh-TW", {
     month: "long",
     day: "numeric",
   });
+
+function GoogleCalendarButton({todo}) {
+  const url = googleCalendarUrl(todo);
+  return url ? <a className="google-calendar-button secondary-button" href={url} target="_blank" rel="noopener noreferrer"
+    aria-label={`將「${todo.text}」加入 Google 行事曆（開啟新分頁）`}>
+    <Icon name="calendar" /> 加入 Google 行事曆
+  </a> : <span className="small-muted">請先設定有效日期，才能加入 Google 行事曆。</span>;
+}
 
 function TodoEditor({ todo: current, onSave, onCancel }) {
   const [todo] = useState(() => current);
@@ -193,6 +202,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false, shared
             </>
           )}
         </span>
+        <GoogleCalendarButton todo={todo} />
         <button
           className="todo-delete"
           data-delete-todo={todo.id}
@@ -349,6 +359,7 @@ export function TodosPanel({ household, commit, notify, upcoming = false, shared
           </button>
         </div>
       </div>
+      <p className="small-muted calendar-export-note">按「加入 Google 行事曆」會開啟預填活動，請在 Google 確認儲存。未選時間為全天，有時間預設 1 小時（台北時間），可在 Google 調整；後續修改與刪除不會自動同步。</p>
       <div className="todo-search">
         <label htmlFor="todo-search">搜尋所有待辦</label>
         <div className="todo-search-field">
@@ -485,7 +496,10 @@ export function TodosPanel({ household, commit, notify, upcoming = false, shared
                   <dt>時間</dt><dd>{selectedTodo.time || "未設定"}</dd>
                   <dt>狀態</dt><dd>{selectedTodo.done ? "已完成" : "未完成"}</dd>
                 </dl>
-                <button type="button" className="primary-button" onClick={()=>setEditing(selectedTodo)}>編輯</button>
+                <div className="todo-detail-actions">
+                  <button type="button" className="primary-button" onClick={()=>setEditing(selectedTodo)}>編輯</button>
+                  <GoogleCalendarButton todo={selectedTodo} />
+                </div>
               </> : <p role="status">這件待辦已被刪除。</p>}
             </section>}
           </>

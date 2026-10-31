@@ -136,7 +136,7 @@ test('foreground polling reloads remote changes and late old-family reads cannot
   await expect(page.locator('.todo-row')).toContainText('遠端新增的事情');
   let release;db.deferTodoList=new Promise(resolve=>{release=resolve;});
   const reads=db.requests.filter(request=>request.path.endsWith('island_list_todos')).length;
-  const response=page.waitForResponse(value=>value.url().endsWith('/rpc/island_list_todos')&&value.request().postDataJSON().p_family_id===FAMILY_A);
+  const response=page.waitForResponse(value=>new URL(value.url()).pathname.endsWith('/rpc/island_list_todos')&&value.request().postDataJSON().p_family_id===FAMILY_A);
   await page.getByRole('button',{name:'重新同步',exact:true}).click();
   await expect.poll(()=>db.requests.filter(request=>request.path.endsWith('island_list_todos')).length).toBeGreaterThan(reads);
   await openFamily(page);await page.getByLabel('目前家庭').selectOption(FAMILY_B);await openTodos(page);

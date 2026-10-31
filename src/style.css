@@ -3569,3 +3569,12 @@ body.family-open {overflow:hidden;}
 .todo-detail dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .todo-edit-row > input { width: 100%; min-width: 0; }
 .calendar-task-text[aria-pressed="true"] { background: #e0ebd6; border-radius: 4px; }
+
+.google-calendar-button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; text-decoration: none; font-size: .8rem; white-space: normal; }
+.todo-row > .google-calendar-button { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .todo-row { flex-wrap: wrap; }
+  .todo-row > .google-calendar-button { order: 1; flex-basis: 100%; }
+}
+.todo-detail-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.calendar-export-note { line-height: 1.7; }
