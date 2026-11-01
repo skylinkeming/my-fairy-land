@@ -83,6 +83,7 @@ test('all four activities use real scenery, props and safe walking routes',async
 test('group photo gathers six residents and downloads an actual PNG',async({page},info)=>{
   test.setTimeout(180000);
   await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'更多操作'}).click();
   await page.locator('#group-photo').click();
   await expect(page.locator('#group-photo')).toHaveText('取消合照集合');
   const states=await page.evaluate(()=>{
