@@ -102,3 +102,17 @@ test('residents independently enter available buildings and can share a coffee t
   }
   assert.ok(shared,'indoor visits happen without pressing a button');
 });
+
+test('automatic social coffee partners reserve separate seats and start a shared coffee break',()=>{
+  const {options}=fixture(2);
+  const life=createResidentLife({...options,leisure:true,leisureSites:[]});placeOutside(life);
+  let shared=false;
+  for(let i=0;i<2000;i++) {
+    life.update(.05);
+    if(life.actors.every(a=>a.state==='indoors'&&a.coffeeStarted)) {
+      shared=true;assert.equal(life.actors[0].coffeeWith,1);assert.equal(life.actors[1].coffeeWith,0);
+      assert.notEqual(life.actors[0].target.ignore,life.actors[1].target.ignore);break;
+    }
+  }
+  assert.ok(shared,'coffee is scheduled for a pair without button presses');
+});

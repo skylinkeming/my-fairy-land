@@ -72,3 +72,12 @@ test('greeting a rain companion pauses both, then sunshine releases rain activit
  life.resume(ids[0]);assert.ok(ids.every(id=>!life.isPaused(id)));life.weather.set('sunny');life.update(.05,true);
  assert.equal(life.leisure.active.length,0);assert.ok(ids.every(id=>life.actors[id].umbrellaPartner==null));
 });
+
+test('day and night cycle independently of rain and respect reduced motion',()=>{
+ const weather=createIslandWeather();weather.update(180);assert.equal(weather.timeOfDay,'night');
+ weather.set('rainy');assert.equal(weather.timeOfDay,'night');weather.update(120);assert.equal(weather.timeOfDay,'day');
+ assert.equal(weather.setTimeOfDay('night'),true);assert.equal(weather.state,'cloudy');
+ assert.equal(weather.setTimeOfDay('invalid'),false);assert.equal(weather.timeOfDay,'night');
+ const frozen=createIslandWeather({automatic:false});frozen.update(1000);assert.equal(frozen.timeOfDay,'day');
+ frozen.set('rainy');frozen.setTimeOfDay('night');frozen.update(1000);assert.equal(frozen.timeOfDay,'night');assert.equal(frozen.state,'rainy');
+});

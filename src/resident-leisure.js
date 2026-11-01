@@ -17,7 +17,7 @@ export function createLeisureSites({nodes,navigation,crossings=[],allow=()=>true
   const sites=[];
   const node=id=>nodes.find(node=>node.id===id)||nodes[0];
   function clearing(kind,island,count,preferred) {
-    const origin=node(island), offsets=count===6?[-1.8,0,1.8].flatMap(x=>[-.9,.9].map(z=>({x,z}))):count===2?[{x:-.9,z:0},{x:.9,z:0}]:[{x:0,z:0}];
+    const origin=node(island), offsets=count===6?[-1.8,0,1.8].flatMap(x=>[-.9,.9].map(z=>({x,z}))):count===3?[{x:-1,z:.65},{x:1,z:.65},{x:0,z:-1.1}]:count===2?[{x:-.9,z:0},{x:.9,z:0}]:[{x:0,z:0}];
     for(const candidate of [preferred,...Array.from({length:100},(_,i)=>({x:origin.x+(i%10-4.5)*1.3,z:origin.z+(Math.floor(i/10)-4.5)*1.3}))]) {
       const points=offsets.map(offset=>({x:candidate.x+offset.x,z:candidate.z+offset.z}));
       if(points.every(point=>navigation.walkable(point)&&allow(point)&&distance(point,origin)<(origin.walkRadius||6)-1.3)&&
@@ -39,7 +39,7 @@ export function createLeisureSites({nodes,navigation,crossings=[],allow=()=>true
       sites.push({id:`fishing-shore-${sites.length}`,kind:'fishing',node:memory.id,center:{...point},points:[point],heading:Math.atan2(point.x-memory.x,point.z-memory.z)});
   }
   const friends=node('friends'),park=node('park'),home=node('home');
-  clearing('picnic','friends',2,{x:friends.x+4,z:friends.z+3});
+  clearing('picnic','friends',3,{x:friends.x+4,z:friends.z+3});
   clearing('garden','park',1,{x:park.x+5,z:park.z-4});
   clearing('photo','home',6,{x:home.x,z:home.z+5});
   for(const island of nodes){
@@ -61,7 +61,7 @@ export function createLeisureSites({nodes,navigation,crossings=[],allow=()=>true
 export function createLeisureController({actors,navigation,sites,random,start,finish,isPaused,weather={state:'sunny'},automatic=true}) {
   const reservations=new Map();
   let elapsed=0,nextAutomatic=8,kindIndex=0,photo=null,initialized=false,initializing=false;
-  let queued=[],lastRequest={status:'idle'};
+  let queued=[],lastRequest={status:'idle'},nextPicnicSize=3;
   const kinds=Object.keys(states).filter(kind=>sites.some(site=>site.kind===kind)&&!['shelter','rainwalk'].includes(kind));
   const origin=actor=>navigation.walkable(actor)?actor:actor.target?.approach||actor;
   const available=actor=>!isPaused(actor.id)&&!actor.leisureExit&&!actor.leisureQueue&&!actor.target?.leisureSite&&!actor.target?.roomId&&!actor.target?.leavingRoom&&actor.partner==null;
@@ -106,6 +106,11 @@ export function createLeisureController({actors,navigation,sites,random,start,fi
       const other=initial?weightedResident(candidates,kind,random):
         candidates.sort((a,b)=>distance(a,site.center)-distance(b,site.center))[0];
       if(!other)return fail('no-friend');participants.push(other);
+      if(!initial&&kind==='picnic'&&site.points.length>=3&&nextPicnicSize===3) {
+        const third=candidates.find(candidate=>candidate!==other&&reachable(candidate,site.points[2]));
+        if(!third&&!manual)return fail('no-friend');
+        if(third)participants.push(third);
+      }
     }
     if(!initial&&kind==='photo'&&site.points.length>1&&random()<.4&&
         (manual||[...reservations.values()].reduce((sum,record)=>sum+record.actors.length,0)<2)) {
@@ -129,7 +134,7 @@ export function createLeisureController({actors,navigation,sites,random,start,fi
       if(kind==='gift'){actor.giftKind=i?participants[0].giftKind:['flower','shell','leaf'][Math.min(2,Math.floor(random()*3))];actor.giftPhase=i?'waiting':'picking';}
       if(kind==='rainwalk')actor.umbrellaPartner=participants[1-i].id;
       start(actor,{node:kind==='gift'&&i===1?site.meetingNode:site.node,point:site.points[i],state:expected(record,i),leisureSite:site.id,leisureKind:kind,
-        heading:(kind==='picnic'||kind==='photo'&&participants.length===2)?Math.atan2(site.points[1-i].x-site.points[i].x,site.points[1-i].z-site.points[i].z):site.heading},manual,initial);
+        heading:kind==='picnic'?Math.atan2(site.center.x-site.points[i].x,site.center.z-site.points[i].z):kind==='photo'&&participants.length===2?Math.atan2(site.points[1-i].x-site.points[i].x,site.points[1-i].z-site.points[i].z):site.heading},manual,initial);
     });
     if(initial) {
       const phases={fishing:[2,8],picnic:[4,18],garden:[6,17],photo:[.5,3.5]},[from,to]=phases[kind]||[1,3];
@@ -137,6 +142,7 @@ export function createLeisureController({actors,navigation,sites,random,start,fi
       participants.forEach(actor=>{actor.leisureTime=record.time;});
       if(kind==='garden')site.growth=record.time/24;
     }
+    if(kind==='picnic'&&site.points.length>=3)nextPicnicSize=participants.length===3?2:3;
     lastRequest={status:'started',kind};return true;
   }
   function initialize() {
@@ -252,8 +258,8 @@ export function createLeisureController({actors,navigation,sites,random,start,fi
       nextAutomatic=elapsed+16+random()*12;
       const active=[...reservations.values()].reduce((sum,record)=>sum+record.actors.length,0);
       for(let i=0;i<kinds.length;i++) {
-        const index=(kindIndex+i)%kinds.length,kind=kinds[index],needed=['picnic','gift'].includes(kind)?2:1;
-        if(active+needed>Math.min(3,actors.length))continue;
+        const index=(kindIndex+i)%kinds.length,kind=kinds[index],needed=kind==='picnic'?Math.min(nextPicnicSize,sites.find(site=>site.kind==='picnic').points.length):kind==='gift'?2:1;
+        if(active+needed>(kind==='picnic'?Math.min(5,actors.length-1):Math.min(3,actors.length)))continue;
         const site=sites.find(site=>site.kind===kind);
         const candidate=site&&weightedResident(actors.filter(available),kind,random);
         if(candidate&&request(candidate.id,kind,false)){kindIndex=(index+1)%kinds.length;break;}

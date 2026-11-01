@@ -168,7 +168,7 @@ export function createResidentLife({
   }
   let mode = chooseActivity(previous, random),
     elapsed = 0,
-    nextChange = 50 + random() * 25;
+    nextChange = (leisure?25:50) + random() * 25;
   const initialMode = mode,
     park = nodes.find((node) => node.id === "park"),
     paused = new Set();
@@ -238,7 +238,7 @@ export function createResidentLife({
   }
   let gathering = null;
   const seatOwners=new Map();
-  let coffeeGatherings=0;
+  let socialRound=0;
   const protectedVisit=actor=>Boolean(actor.target?.roomId || actor.target?.leavingRoom || actor.target?.leisureSite || actor.leisureQueue || actor.leisureExit);
   function occupancy(id) {
     return actors.filter(
@@ -391,16 +391,19 @@ export function createResidentLife({
     actor.sipTime = 0;
   }
   function planGathering() {
-    const available=actors.filter(actor=>!protectedVisit(actor));
+    const available=actors.filter(actor=>!paused.has(actor.id)&&!protectedVisit(actor));
     available.forEach((actor) => {
       actor.activity = "wander";
       actor.partner = null;
     });
     gathering = null;
-    if (mode === "wander" || available.length < 2) return;
+    if (mode === "wander") return;
+    const socialKind=['coffee','swing','chat','play','pairwalk'][socialRound%5];
     const cafe=buildings.find(room=>room.type==='cafe');
-    if(cafe && (coffeeGatherings===0 || (mode==='play' && random()<.45))) {
-      const existing=actors.filter(actor=>actor.target?.roomId===cafe.id && !paused.has(actor.id));
+    const existing=cafe?actors.filter(actor=>actor.target?.roomId===cafe.id && !actor.manualIndoor && actor.coffeeWith==null && !paused.has(actor.id)):[];
+    if(available.length+(socialKind==='coffee'?existing.length:0)<2)return;
+    socialRound++;
+    if(cafe && socialKind==='coffee') {
       const companions=[...available].filter(actor=>!paused.has(actor.id))
         .sort((a,b)=>distance(a,cafe.center)-distance(b,cafe.center));
       const pair=[...existing,...companions].slice(0,2);
@@ -413,21 +416,14 @@ export function createResidentLife({
         }
         if(planned===2) {
           pair.forEach((actor,index)=>{actor.coffeeWith=pair[1-index].id;actor.coffeeStarted=false;actor.roomEnteredAt=elapsed;});
-          coffeeGatherings++;
         }
         if(planned) return;
       }
     }
     let pair = shuffled(available).slice(0, 2);
     if(leisure&&mode==='play'){pair[0]=weightedResident(available,'ball',random);pair[1]=shuffled(available.filter(actor=>actor!==pair[0]))[0];}
-    let activity =
-      mode === "swing"
-        ? random() < 0.5
-          ? "swing"
-          : "chat"
-        : random() < 0.3
-          ? "pairwalk"
-          : "play";
+    let activity = leisure ? (socialKind==='coffee' ? (park?'swing':'play') : socialKind) :
+      mode==='swing' ? (random()<.5?'swing':'chat') : random()<.3?'pairwalk':'play';
     if(!park && (activity==="swing" || activity==="chat"))activity="play";
     const localPair = activity === "play" || activity === "pairwalk";
     if (localPair)
@@ -676,10 +672,11 @@ export function createResidentLife({
     if(!manualUpdate)weather.update(dt);
     if(sites.length)leisureController.update(dt);
     if (paused.size) nextChange += dt;
+    if (leisure && elapsed >= nextChange && gathering) nextChange=elapsed+10;
     if (elapsed >= nextChange) {
       mode = chooseActivity(mode, random);
       planGathering();
-      nextChange = elapsed + (mode === "wander" ? 80 : 110) + random() * 30;
+      nextChange = elapsed + (leisure ? 30 : mode === "wander" ? 80 : 110) + random() * (leisure?15:30);
       actors.forEach((actor) => {
         if (!paused.has(actor.id) && !protectedVisit(actor)) begin(actor);
       });

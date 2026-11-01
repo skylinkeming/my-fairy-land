@@ -230,6 +230,7 @@ export function WorldViewport({
           <strong>{visit?.name}</strong>
         </div>
         <small>拖曳旋轉視角，從各個方向看看我 ♡</small>
+        <p className="mobile-resident-greeting">{visit?.greeting}</p>
         <div className="resident-dialog-actions">
         <button
           type="button"

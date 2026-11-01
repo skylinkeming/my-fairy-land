@@ -1,6 +1,7 @@
 import {MAP_CAMERA_DISTANCE,MAP_CAMERA_FAR,MAP_MAX_POLAR_ANGLE,mapViewPosition} from './world-camera.js';
 import {createResidentStoriesArt} from './resident-stories-art.js';
-import {WEATHER_LABELS} from './island-weather.js';
+import {WEATHER_LABELS,TIME_LABELS} from './island-weather.js';
+import {createIslandSky} from './island-sky.js';
 import {LEISURE_LABELS,leisureRequestMessage} from './resident-leisure.js';
 import {residentActivityMarker} from './resident-activity-marker.js';
 import {createLeisureArt} from './resident-leisure-art.js';
@@ -70,7 +71,7 @@ export function createWorld(
     delete container.dataset.followedResident;
   }
   controls.addEventListener("start", stopFollowing);
-  scene.add(new T.AmbientLight(0xfff2d6, 1.55));
+  const ambient=new T.AmbientLight(0xfff2d6, 1.55);scene.add(ambient);
   const sun = new T.DirectionalLight(0xfff0d2, 2.5);
   sun.position.set(-25, 55, 32);
   sun.castShadow = true;
@@ -86,6 +87,7 @@ export function createWorld(
   sun.shadow.normalBias = 0.06;
   sun.shadow.bias = -0.0001;
   scene.add(sun);
+  const sky=createIslandSky({scene,sun,ambient});
   const mats = new Map();
   function mat(c) {
     if (!mats.has(c))
@@ -1234,9 +1236,11 @@ export function createWorld(
       leisureArt.updateSites(life.actors,reduced);
       storiesArt.updateWorld(reduced);
       const weather=life.weather.state;
-      sun.intensity=weather==='sunny'?2.5:weather==='cloudy'?1.8:1.25;
+      sky.update(life.weather,reduced,dt);
       container.dataset.weather=weather;
-      if(lastWeather!==weather){lastWeather=weather;frameDirty=true;onWeatherChange({state:weather,label:WEATHER_LABELS[weather]});}
+      container.dataset.timeOfDay=life.weather.timeOfDay;
+      const atmosphere=`${weather}:${life.weather.timeOfDay}`;
+      if(lastWeather!==atmosphere){lastWeather=atmosphere;frameDirty=true;onWeatherChange({state:weather,label:WEATHER_LABELS[weather],timeOfDay:life.weather.timeOfDay,timeLabel:TIME_LABELS[life.weather.timeOfDay]});}
       swingPivots.forEach((pivot, slot) => {
         const rider = life.actors.find(
           (actor) => actor.slot === slot && actor.state === "swinging",
@@ -1415,6 +1419,7 @@ export function createWorld(
       activityBadges.forEach(badge=>badge.el.remove());
       leisureArt.dispose();
       storiesArt.dispose();
+      sky.dispose();
       residents.forEach(resident => disposeShapeGeometry(resident.g));
       controls.dispose();
       scene.traverse((object) => {
@@ -1483,6 +1488,8 @@ export function createWorld(
     },
     setWeather(state){const changed=life.weather.set(state);if(changed){life.leisure.update(0);frameDirty=true;}return changed;},
     getWeather(){return life.weather.state;},
+    setTimeOfDay(value){const changed=life.weather.setTimeOfDay(value);if(changed)frameDirty=true;return changed;},
+    getTimeOfDay(){return life.weather.timeOfDay;},
     getCameraState(){const offset=camera.position.clone().sub(controls.target);return {distance:offset.length(),polarAngle:new T.Spherical().setFromVector3(offset).phi,maxPolarAngle:controls.maxPolarAngle,near:camera.near,far:camera.far,zoom:camera.zoom,position:camera.position.toArray(),target:controls.target.toArray()};},
     getActivityRequestMessage(){return leisureRequestMessage(life.leisure.lastRequest);},
     takeGroupPhoto() {

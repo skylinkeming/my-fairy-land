@@ -133,3 +133,23 @@ test('reduced motion lets a finished fisher clear the spot for the waiting resid
   for(let i=0;i<1600&&!started;i++){life.update(.05,true);started=life.actors[1].state==='fishing';}
   assert.ok(started,'the previous fisher walks clear instead of freezing on the released spot');
 });
+
+test('three friends gather safely for a picnic, share the meal timer, and leave together',()=>{
+  const trioSite={id:'trio',kind:'picnic',node:'home',center:{x:-3,z:3},points:[{x:-4,z:3.65},{x:-2,z:3.65},{x:-3,z:1.9}],heading:0};
+  const life=createResidentLife({nodes,links:[],leisureSites:[trioSite],leisureAutomatic:false,count:6,random:()=>.1});
+  const starts=[[-6,3],[-2,6],[-5,0],[6,-3],[5,5],[0,-6]];
+  life.actors.forEach((actor,i)=>Object.assign(actor,{x:starts[i][0],z:starts[i][1],node:'home',state:'waiting',wait:1000,partner:null,activity:'wander'}));
+  assert.ok(life.requestLeisure(0,'picnic'));const record=life.leisure.active[0];assert.equal(record.ids.length,3);
+  let together=false;
+  tick(life,50,()=>{const trio=record.ids.map(id=>life.actors[id]);if(trio.every(a=>a.state==='picnicking')){together=true;assert.ok(trio.every(a=>a.leisureTime===trio[0].leisureTime));}});
+  assert.ok(together);assert.ok(record.ids.every(id=>life.actors[id].leisureCompleted>=1));
+});
+
+test('automatic picnic scheduling sometimes invites three residents without manual requests',()=>{
+  let seed=23;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const picnic={id:'trio',kind:'picnic',node:'home',center:{x:-3,z:3},points:[{x:-4,z:3.65},{x:-2,z:3.65},{x:-3,z:1.9}],heading:0};
+  const life=createResidentLife({nodes,links:[],leisureSites:[picnic],leisureInitial:false,count:6,random});
+  let started=false;
+  for(let i=0;i<3000;i++){life.update(.05);if(life.leisure.active.some(record=>record.kind==='picnic'&&record.ids.length===3&&record.started)){started=true;break;}}
+  assert.ok(started);
+});

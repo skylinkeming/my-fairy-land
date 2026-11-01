@@ -33,3 +33,11 @@ set role anon;
 select pg_temp.fails('select * from public.island_resident_shapes','permission denied');
 select pg_temp.fails(format('select * from public.island_list_resident_shapes(%L)',:'family'),'permission denied');
 reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);
+select public.island_create_family('Foot controls') as feet_family \gset
+select count(*) from public.island_save_resident_shapes(:'feet_family','[{"resident_id":"guagua","shape":{"footWidth":1.4,"footThickness":0.8,"footLength":1.2}}]');
+select pg_temp.assert_true((select shape->>'footWidth'='1.4' and shape->>'footThickness'='0.8' and shape->>'footLength'='1.2' from public.island_list_resident_shapes(:'feet_family')),'new foot controls persist independently');
+select pg_temp.fails(format('select * from public.island_save_resident_shapes(%L,%L)',:'feet_family','[{"resident_id":"guagua","version":1,"shape":{"footWidth":10}}]'),'invalid_shape');
+reset role;

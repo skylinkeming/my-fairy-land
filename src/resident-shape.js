@@ -11,6 +11,8 @@ export const SHAPE_CONTROLS = [
   ['bodyHeight', '身體高度', .75, 1.35, 1],
   ['bodyDepth', '肚子厚度', .65, 1.65, 1],
   ['armSize', '手臂大小', .65, 1.5, 1],
+  ['footWidth', '腳部胖度', .65, 1.6, 1],
+  ['footThickness', '腳掌厚度', .65, 1.6, 1],
   ['footLength', '腳掌長度', .65, 1.6, 1],
   ['eyeSpacing', '眼睛間距', .75, 1.25, 1],
   ['eyeY', '眼睛上下位置', -.08, .08, 0],
@@ -71,6 +73,8 @@ export function applyResidentShape(root, value) {
       node.scale.multiplyScalar(shape.armSize);
     } else if (kind === 'feet') {
       node.position.x *= Math.sqrt(shape.bodyWidth);
+      node.scale.x *= shape.footWidth;
+      node.scale.y *= shape.footThickness;
       node.scale.z *= shape.footLength;
     } else if (kind === 'tail') node.scale.multiplyScalar(shape.tailSize);
     else if (kind === 'pillow') {

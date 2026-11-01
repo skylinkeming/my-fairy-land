@@ -46,12 +46,12 @@ export function createLeisureArt({scene,residents,sites,top}) {
     const root=group(scene,`leisure-site-${site.kind}`);root.userData.walkThrough=true;root.position.set(site.center.x,top,site.center.z);
     let mat,basket,tripod,tripodFlash,butterfly,flowers=[];
     if(site.kind==='picnic') {
-      mat=group(root,'picnic-blanket');box(mat,2.5,.025,1.7,'#d5a49b',0,.025,0);
-      for(let i=0;i<5;i++)box(mat,.025,.03,1.7,'#f3dfb9',i*.5-1,.03,0);
+      mat=group(root,'picnic-blanket');box(mat,3,.025,2.7,'#d5a49b',0,.025,0);
+      for(let i=0;i<5;i++)box(mat,.025,.03,2.7,'#f3dfb9',i*.5-1,.03,0);
       basket=group(root,'picnic-basket');box(basket,.4,.27,.32,'#b49163',0,.18,-.5);
       const handle=mesh(new T.TorusGeometry(.19,.025,5,12),'#896d4d',basket,0,.41,-.5);
       box(basket,.43,.035,.34,'#d7b984',0,.33,-.5);
-      for(const x of [-.2,.2])cylinder(root,.14,.025,'#f1e3bb',x,.055,.12);
+      for(const point of site.points)cylinder(root,.14,.025,'#f1e3bb',point.x-site.center.x,.055,(point.z-site.center.z)*.4);
     }
     if(site.kind==='garden') {
       box(root,1.4,.055,.65,'#9f8061',0,.03,1.35);

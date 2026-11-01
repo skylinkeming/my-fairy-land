@@ -926,6 +926,7 @@ test('indoor controls and coffee invitations fit a phone',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});await page.reload();
   await expect(page.locator('.map-label')).toHaveCount(4,{timeout:20000});
   const control=page.locator('#view-interiors');
+  await page.getByRole('button',{name:'更多操作'}).click();
   await control.click();
   const bounds=await control.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(390);
   await page.locator('.label-friends').click();
@@ -933,6 +934,6 @@ test('indoor controls and coffee invitations fit a phone',async({page})=>{
   const dialog=page.getByRole('region',{name:'娃娃問候'});
   await expect(dialog.getByRole('button',{name:'回家休息',exact:true})).toBeVisible();
   const panel=await dialog.boundingBox();expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(390);
-  const speech=page.getByRole('status',{name:'娃娃頭頂的對話'});await expect(speech).toBeVisible();
+  const speech=dialog.locator('.mobile-resident-greeting');await expect(speech).toBeVisible();
   const bubble=await speech.boundingBox();expect(bubble.x).toBeGreaterThanOrEqual(0);expect(bubble.x+bubble.width).toBeLessThanOrEqual(390);
 });

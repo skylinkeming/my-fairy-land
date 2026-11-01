@@ -193,6 +193,7 @@ test('gift travels from a pickup to a friend, who receives it and stores it',asy
 
 test('weather control shows rain, real shared umbrellas, shelter and sunny shade on a phone',async({page},info)=>{
   await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'更多操作'}).click();
   await page.locator('#island-weather').click();await expect(page.locator('#world')).toHaveAttribute('data-weather','cloudy');
   await page.locator('#island-weather').click();await expect(page.locator('#world')).toHaveAttribute('data-weather','rainy');
   await expect.poll(()=>page.evaluate(()=>window.testStories.scene.getObjectByName('story-rain').visible)).toBe(true);
@@ -220,6 +221,9 @@ test('weather control shows rain, real shared umbrellas, shelter and sunny shade
   await expect.poll(()=>page.evaluate(()=>window.testStories.residents[0].g.getObjectByName('story-umbrella').visible)).toBe(false);
   await page.locator('#world').screenshot({path:info.outputPath('rain-shelter-phone.png')});
   await page.evaluate(()=>window.testWorld.endResidentVisit());
+  if (await page.locator('.mobile-tools-toggle').getAttribute('aria-expanded') === 'false') {
+    await page.getByRole('button',{name:'更多操作'}).click();
+  }
   await page.locator('#island-weather').click();await expect(page.locator('#world')).toHaveAttribute('data-weather','sunny');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

@@ -64,3 +64,18 @@ test('seated shaped torsos rest on the bench surface at different sizes and head
     }
   }
 });
+
+test('foot width and thickness change independent axes, survive export, and restore old shapes',()=>{
+  for(const create of [createFrog,createDinosaur]) {
+    const resident=create(art),foot=resident.feet[0],original=foot.scale.clone();
+    applyResidentShape(resident.g,{footWidth:1.5,footThickness:.8,footLength:1.2});
+    assert.equal(foot.scale.x,original.x*1.5);assert.equal(foot.scale.y,original.y*.8);assert.equal(foot.scale.z,original.z*1.2);
+    applyResidentShape(resident.g,{footWidth:1.5,footThickness:.8,footLength:1.2});
+    assert.equal(foot.scale.x,original.x*1.5,'repeated previews do not compound');
+    applyResidentShape(resident.g,{});assert.deepEqual(foot.scale.toArray(),original.toArray());
+  }
+  const saved=parseShapeSettings(serializeShapeSettings({guagua:{footWidth:1.4,footThickness:1.2}}));
+  assert.equal(saved.guagua.footWidth,1.4);assert.equal(saved.guagua.footThickness,1.2);
+  assert.equal(normalizeShape({footLength:1.3}).footWidth,1);
+  assert.equal(normalizeShape({footThickness:100}).footThickness,1.6);
+});

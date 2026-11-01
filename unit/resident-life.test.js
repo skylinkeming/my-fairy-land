@@ -373,3 +373,14 @@ test('a tight passage uses stable priority and waiting instead of switching side
   assert.ok(waited, 'one walker explicitly waits for the priority walker');
   assert.ok(firstPassed, 'priority walker is allowed to leave the passage');
 });
+
+test('automatic social plans let two residents swing together while others keep their own plans',()=>{
+  let seed=17;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const life=createResidentLife({nodes:[{id:'park',x:0,z:0,walkRadius:14}],links:[],leisure:true,leisureSites:[],leisureAutomatic:false,random});
+  let shared=false;
+  for(let i=0;i<4000;i++) {
+    life.update(.05);const pair=life.actors.filter(a=>a.state==='swinging');
+    if(pair.length===2){shared=true;assert.equal(pair[0].partner,pair[1].id);assert.notEqual(pair[0].slot,pair[1].slot);break;}
+  }
+  assert.ok(shared,'a pair reaches both real swing seats without manual invitations');
+});

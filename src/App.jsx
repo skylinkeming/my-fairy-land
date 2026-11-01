@@ -177,8 +177,9 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
   const [localHousehold, setHousehold] = useState(()=>loadHousehold(scope.storageKey)),
     [panel, setPanel] = useState(null),
     [photo, setPhoto] = useState(null);
-  const [weather,setWeather]=useState({state:'sunny',label:'☀️ 晴天'});
+  const [weather,setWeather]=useState({state:'sunny',label:'☀️ 晴天',timeOfDay:'day',timeLabel:'☀️ 白天'});
   const [groupPhoto,setGroupPhoto]=useState({phase:'idle'});
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [expanded, setExpanded] = useState(false),
     [pan, setPan] = useState(false),
     [interiors, setInteriors] = useState(false),
@@ -297,6 +298,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
     return () => document.removeEventListener("keydown", keydown);
   }, [photo, panel, editor, closePanel, expandMap]);
   const onVisit = useCallback(() => {
+    setMobileToolsOpen(false);
     closePanel(false);
     setExpanded(true);
     setPan(false);
@@ -318,6 +320,7 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
       : "一起收藏第一個美好",
   };
   const inspect = (index) => {
+    setMobileToolsOpen(false);
     closePanel(false);
     setExpanded(true);
     setPan(false);
@@ -446,9 +449,9 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
             </div>
             <div className="weather-pill">
               <Icon name="sun" />
-              <span>今日島上，晴時有你</span>
+              <span>{weather.timeOfDay==='night'?'夜晚的小島，慢慢休息':'白天的小島，悠閒生活'}</span>
               <span className="weather-separator" />
-              <span>24°</span>
+              <span>{weather.label}</span>
             </div>
             <WorldViewport
               worldRef={worldRef}
@@ -470,7 +473,14 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
               <span className="live-dot" /> OUR LITTLE WORLD{" "}
               <span className="caption-line" /> EST. 2026
             </div>
-            <div className="map-controls">
+            <div className={`map-controls ${mobileToolsOpen ? "mobile-tools-open" : ""}`} role="group" aria-label="地圖操作">
+              <button
+                className="mobile-tools-toggle map-expand-button"
+                aria-expanded={mobileToolsOpen}
+                onClick={() => setMobileToolsOpen(!mobileToolsOpen)}
+              >
+                {mobileToolsOpen ? "收起工具 ▴" : "更多操作 ▾"}
+              </button>
               <button
                 id="map-expand"
                 className="map-expand-button"
@@ -508,6 +518,12 @@ function IslandApp({workspace,scope,familyOpen,onFamilyOpen}) {
                 aria-label={`島上天氣：${weather.label}，按下切換天氣`} onClick={()=>{
                   const states=['sunny','cloudy','rainy'];worldRef.current?.setWeather(states[(states.indexOf(weather.state)+1)%states.length]);
                 }}>{weather.label}</button>
+              <button id="island-time" className="map-expand-button" disabled={!ready}
+                aria-label={`島上時間：${weather.timeLabel}，按下切換白天與夜晚`}
+                title="小島會自行輪替白天與夜晚，也可以手動切換"
+                onClick={()=>worldRef.current?.setTimeOfDay(weather.timeOfDay==='night'?'day':'night')}>
+                {weather.timeLabel}
+              </button>
               <button id="group-photo" className="map-expand-button" disabled={!ready}
                 onClick={()=>{
                   if(['gathering','posing'].includes(groupPhoto.phase)){worldRef.current?.cancelGroupPhoto();return;}

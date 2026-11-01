@@ -18,6 +18,7 @@ export function createShapesApi(client,familyId) {
   };
 }
 export function shapeError(error) {
+  if(String(error?.message).includes('invalid_shape'))return '家庭資料庫尚未支援新的腳部造型設定，請套用 202611010001_resident_feet.sql 更新。你的調整仍保留，可先匯出備份。';
   if(error?.code==='PGRST202'||error?.code==='42P01')return '家庭的雲端造型儲存尚未設定，請聯絡管理者套用娃娃設定資料庫更新。本機設定仍保留，可先匯出備份。';
   if(String(error?.message).includes('shape_conflict'))return '這隻娃娃的造型已被家人更新。你的調整尚未儲存；可先匯出備份，再按「還原未儲存調整」載入最新造型。';
   if(error?.code==='42501')return '目前沒有這個家庭的存取權限，請重新整理家庭列表。';

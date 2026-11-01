@@ -23,6 +23,7 @@
 2. `supabase/migrations/202610300002_google_names.sql`
 3. `supabase/migrations/202610310001_family_todos.sql`
 4. `supabase/migrations/202610310002_resident_shapes.sql`
+5. `supabase/migrations/202611010001_resident_feet.sql`（新增腳部胖度與腳掌厚度，保留既有造型）
 
 第二份 migration 讓建立／加入家庭時採用 Google 的姓名；第三份新增共享待辦，第四份新增家庭娃娃外觀設定。既有專案只需依序執行尚未套用的 migration，不會刪除既有家庭、成員或待辦。
 
